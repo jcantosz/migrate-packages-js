@@ -163,7 +163,7 @@ echo "$packages" | while IFS= read -r response; do
         -Dfile=${file} \
         -DpomFile=${package_artifact}-${version}.pom \
         -DrepositoryId=github \
-        -Durl=https://maven.pkg.github.com/${TARGET_ORG}/${repo_name}
+        -Durl=https://maven.pkg.github.com/${TARGET_ORG}/${repo_name} || echo "ERROR: Could not publish version $version of $package_name. Skipping version."
     done
     # Clean up
     cd $temp_dir
