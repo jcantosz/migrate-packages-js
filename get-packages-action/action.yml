@@ -1,0 +1,36 @@
+name: "Get GitHub Packages"
+description: "Discovers and filters packages from a GitHub organization by type and repository"
+inputs:
+  source-org:
+    description: "The source organization from which to get packages"
+    required: true
+  source-host:
+    description: "The source GitHub host (e.g., github.com)"
+    required: true
+    default: "github.com"
+  gh-source-pat:
+    description: "GitHub PAT for reading packages from source host (needs read:packages scope)"
+    required: true
+  repo-name:
+    description: "Repository name to filter packages by. If not provided, will get packages without a linked repository"
+    required: false
+outputs:
+  npm-packages:
+    description: "JSON array of npm packages found matching criteria"
+  npm-count:
+    description: "Number of npm packages found"
+  docker-packages:
+    description: "JSON array of Docker packages found matching criteria"
+  docker-count:
+    description: "Number of Docker packages found"
+  nuget-packages:
+    description: "JSON array of NuGet packages found matching criteria"
+  nuget-count:
+    description: "Number of NuGet packages found"
+  all-packages:
+    description: "JSON object containing all packages by type"
+  total-count:
+    description: "Total number of packages found across all types"
+runs:
+  using: "node16"
+  main: "src/index.js"

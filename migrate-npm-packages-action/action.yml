@@ -1,0 +1,34 @@
+name: "Migrate GitHub Packages"
+description: "A GitHub Action to migrate packages (npm, Docker, NuGet) between GitHub organizations."
+inputs:
+  source-org:
+    description: "The source organization from which to migrate packages."
+    required: true
+  source-host:
+    description: "The source GitHub host (e.g., github.com)."
+    required: true
+  target-org:
+    description: "The target organization to which to migrate packages."
+    required: true
+  target-host:
+    description: "The target GitHub host (e.g., github.com)."
+    required: true
+  gh-source-pat:
+    description: "GitHub PAT for reading packages from source host."
+    required: true
+  gh-target-pat:
+    description: "GitHub PAT for writing packages to target host."
+    required: true
+  repo-name:
+    description: "Repository name to filter packages by. If not provided, will migrate packages without a linked repository."
+    required: false
+  packages:
+    description: "JSON array of npm packages to migrate (from get-packages-action output)"
+    required: true
+outputs:
+  result:
+    description: "The result of the migration process as JSON with success/failure counts."
+
+runs:
+  using: "node16"
+  main: "src/index.js"

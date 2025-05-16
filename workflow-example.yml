@@ -1,0 +1,110 @@
+name: Migrate GitHub Packages Example
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-org:
+        description: 'Source organization name'
+        required: true
+      source-host:
+        description: 'Source GitHub host'
+        required: true
+        default: 'github.com'
+      target-org:
+        description: 'Target organization name'
+        required: true
+      target-host:
+        description: 'Target GitHub host'
+        required: true
+        default: 'github.com'
+      repo-name:
+        description: 'Repository name to filter packages (leave empty for packages without repo)'
+        required: false
+
+jobs:
+  discover-packages:
+    runs-on: ubuntu-latest
+    outputs:
+      npm-count: ${{ steps.get-packages.outputs.npm-count }}
+      docker-count: ${{ steps.get-packages.outputs.docker-count }}
+      nuget-count: ${{ steps.get-packages.outputs.nuget-count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Get packages
+        id: get-packages
+        uses: ./get-packages-action
+        with:
+          source-org: ${{ github.event.inputs.source-org }}
+          source-host: ${{ github.event.inputs.source-host }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo-name: ${{ github.event.inputs.repo-name }}
+  
+  migrate-npm:
+    needs: discover-packages
+    if: needs.discover-packages.outputs.npm-count > 0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Get packages again (to access the full output data)
+        id: get-packages
+        uses: ./get-packages-action
+        with:
+          source-org: ${{ github.event.inputs.source-org }}
+          source-host: ${{ github.event.inputs.source-host }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo-name: ${{ github.event.inputs.repo-name }}
+      
+      - name: Migrate npm packages
+        uses: ./migrate-npm-packages-action
+        with:
+          source-org: ${{ github.event.inputs.source-org }}
+          source-host: ${{ github.event.inputs.source-host }}
+          target-org: ${{ github.event.inputs.target-org }}
+          target-host: ${{ github.event.inputs.target-host }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ steps.get-packages.outputs.npm-packages }}
+  
+  migrate-docker:
+    needs: discover-packages
+    if: needs.discover-packages.outputs.docker-count > 0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Get packages again (to access the full output data)
+        id: get-packages
+        uses: ./get-packages-action
+        with:
+          source-org: ${{ github.event.inputs.source-org }}
+          source-host: ${{ github.event.inputs.source-host }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo-name: ${{ github.event.inputs.repo-name }}
+      
+      - name: Migrate Docker packages
+        run: echo "TODO: Implement Docker package migration with packages: ${{ steps.get-packages.outputs.docker-packages }}"
+  
+  migrate-nuget:
+    needs: discover-packages
+    if: needs.discover-packages.outputs.nuget-count > 0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Get packages again (to access the full output data)
+        id: get-packages
+        uses: ./get-packages-action
+        with:
+          source-org: ${{ github.event.inputs.source-org }}
+          source-host: ${{ github.event.inputs.source-host }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo-name: ${{ github.event.inputs.repo-name }}
+      
+      - name: Migrate NuGet packages
+        run: echo "TODO: Implement NuGet package migration with packages: ${{ steps.get-packages.outputs.nuget-packages }}"

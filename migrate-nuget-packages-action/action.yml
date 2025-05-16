@@ -1,0 +1,32 @@
+name: "Migrate NuGet Packages"
+description: "GitHub Action to migrate NuGet packages between GitHub organizations"
+inputs:
+  source-org:
+    description: "The source organization from which to migrate NuGet packages"
+    required: true
+  source-host:
+    description: "The source GitHub host (e.g., github.com)"
+    required: true
+    default: "github.com"
+  target-org:
+    description: "The target organization to which to migrate NuGet packages"
+    required: true
+  target-host:
+    description: "The target GitHub host (e.g., github.com)"
+    required: true
+    default: "github.com"
+  gh-source-pat:
+    description: "GitHub PAT for reading packages from source host"
+    required: true
+  gh-target-pat:
+    description: "GitHub PAT for writing packages to target host"
+    required: true
+  packages:
+    description: "JSON array of NuGet packages to migrate (from get-packages-action output)"
+    required: true
+outputs:
+  result:
+    description: "The results of the migration process as a JSON array with success/failure counts for each package"
+runs:
+  using: "node20"
+  main: "src/index.js"
