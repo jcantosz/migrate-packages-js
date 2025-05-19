@@ -35,6 +35,28 @@ jobs:
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           repo-name: ${{ github.event.inputs.repo-name }}
 
+  list-outputs:
+    runs-on: ubuntu-latest
+    needs: get-packages
+    steps:
+      - name: Write step summary
+        if: always()
+        id: write-output
+        run: |
+          echo "NPM packages found: ${{ needs.get-packages.outputs.npm-count }}"
+          echo "Container packages found: ${{ needs.get-packages.outputs.container-count }}"
+          echo "NuGet packages found: ${{ needs.get-packages.outputs.nuget-count }}"
+          echo "RubyGems packages found: ${{ needs.get-packages.outputs.rubygems-count }}"
+          echo "Maven packages found: ${{ needs.get-packages.outputs.maven-count }}"
+          echo "Total packages found: ${{ needs.get-packages.outputs.total-count }}"
+          echo "------"
+          echo "All packages found: ${{ needs.get-packages.outputs.all-packages }}"
+          echo "NPM packages: ${{ needs.get-packages.outputs.npm-packages }}"
+          echo "Container packages: ${{ needs.get-packages.outputs.container-packages }}"
+          echo "NuGet packages: ${{ needs.get-packages.outputs.nuget-packages }}"
+          echo "RubyGems packages: ${{ needs.get-packages.outputs.rubygems-packages }}"
+          echo "Maven packages: ${{ needs.get-packages.outputs.maven-packages }}"
+
   migrate-nuget:
     runs-on: ubuntu-latest
     needs: get-packages
