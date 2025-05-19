@@ -84,7 +84,7 @@ jobs:
         if: always()
         id: write-output
         run: |
-          echo ${{ steps.migrate-nuget.outputs.result }} > $GITHUB_STEP_SUMMARY
+          echo ${{ steps.migrate-nuget.outputs.result-summary }} > $GITHUB_STEP_SUMMARY
           # echo "NuGet packages migrated: ${{ steps.migrate-nuget.outputs.result }}"
           # echo "NuGet packages failed: ${{ steps.migrate-nuget.outputs.failed }}"
           # echo "NuGet packages succeeded: ${{ steps.migrate-nuget.outputs.succeeded }}"
@@ -113,7 +113,7 @@ jobs:
         if: always()
         id: write-output
         run: |
-          echo ${{ steps.migrate-npm.outputs.result }} > $GITHUB_STEP_SUMMARY
+          echo ${{ steps.migrate-npm.outputs.result-summary }} > $GITHUB_STEP_SUMMARY
 
   migrate-container:
     runs-on: ubuntu-latest
@@ -139,7 +139,7 @@ jobs:
         if: always()
         id: write-output
         run: |
-          echo ${{ steps.migrate-container.outputs.result }} > $GITHUB_STEP_SUMMARY
+          echo ${{ steps.migrate-container.outputs.result-summary }} > $GITHUB_STEP_SUMMARY
           # echo "Container packages migrated: ${{ steps.migrate-container.outputs.result }}"
           # echo "Container packages failed: ${{ steps.migrate-container.outputs.failed }}"
           # echo "Container packages succeeded: ${{ steps.migrate-container.outputs.succeeded }}"

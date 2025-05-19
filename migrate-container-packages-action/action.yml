@@ -33,6 +33,8 @@ inputs:
 outputs:
   result:
     description: "The results of the migration process as a JSON array with success/failure counts for each package"
+  result-summary:
+    description: "The summarized results with success/failure counts for each package"
 runs:
   using: "node20"
   main: "dist/index.js"

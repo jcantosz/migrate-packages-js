@@ -350,6 +350,7 @@ async function run() {
     const summary = formatResults(results);
     core.info(summary);
     core.setOutput("result", JSON.stringify(results));
+    core.setOutput("result-summary", JSON.stringify(summary));
     core.info("Container migration complete.");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);

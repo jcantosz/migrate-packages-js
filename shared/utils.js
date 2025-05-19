@@ -178,6 +178,17 @@ export function outputResults(results, packageType) {
   const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
   const totalSkipped = results.filter((r) => r.skipped).length;
 
+  let summary = "Migration completed. Summary:\n";
+  
+  // Add detailed information for each package
+  results.forEach((r) => {
+    if (r.skipped) {
+      summary += `- ${r.package}: SKIPPED (${r.reason || 'No reason provided'})\n`;
+    } else {
+      summary += `- ${r.package}: ${r.succeeded} versions succeeded, ${r.failed} versions failed\n`;
+    }
+  });
+
   // Log summary
   core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
   core.info(`Total packages processed: ${totalPackages}`);
@@ -186,9 +197,11 @@ export function outputResults(results, packageType) {
   if (totalSkipped > 0) {
     core.info(`Skipped packages: ${totalSkipped}`);
   }
+  core.info(summary);
 
   // Set output
   core.setOutput("result", JSON.stringify(results));
+  core.setOutput("result-summary", summary);
 
   // Set job status based on results
   if (totalFailed > 0 && totalSuccess === 0) {
