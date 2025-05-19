@@ -31609,7 +31609,24 @@ function getRegistryUrl(apiUrl, customRegistryUrl) {
   if (customRegistryUrl) {
     return customRegistryUrl;
   }
-  return apiUrl.includes("github.com") ? "ghcr.io" : `containers.${new URL(apiUrl).hostname}`;
+
+  const url = new URL(apiUrl);
+  const hostname = url.hostname;
+
+  // Handle github.com case
+  if (hostname === "api.github.com") {
+    return "ghcr.io";
+  }
+
+  // Handle GitHub Data Residency case with subdomain pattern: api.SUBDOMAIN.ghe.com
+  if (hostname.startsWith("api.")) {
+    // Remove the "api." prefix to get the base domain
+    const baseDomain = hostname.substring(4);
+    return `containers.${baseDomain}`;
+  }
+
+  // Fallback for other patterns
+  return `containers.${hostname}`;
 }
 
 /**

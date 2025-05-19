@@ -73,9 +73,22 @@ export function getNpmRegistryUrl(apiUrl, customRegistryUrl) {
 
   // Extract the domain from API URL
   const url = new URL(apiUrl);
-  const domain = url.hostname;
+  const hostname = url.hostname;
 
-  return domain === "api.github.com" ? "https://npm.pkg.github.com" : `https://npm.pkg.${domain.replace(/^api\./, "")}`;
+  // Handle github.com case
+  if (hostname === "api.github.com") {
+    return "https://npm.pkg.github.com";
+  }
+
+  // Handle GitHub Data Residency case with subdomain pattern: api.SUBDOMAIN.ghe.com
+  if (hostname.startsWith("api.")) {
+    // Remove the "api." prefix to get the base domain
+    const baseDomain = hostname.substring(4);
+    return `https://npm.pkg.${baseDomain}`;
+  }
+
+  // Fallback for other patterns
+  return `https://npm.pkg.${hostname}`;
 }
 
 /**
@@ -88,11 +101,22 @@ export function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
 
   // Extract the domain from API URL
   const url = new URL(apiUrl);
-  const domain = url.hostname;
+  const hostname = url.hostname;
 
-  return domain === "api.github.com"
-    ? "https://nuget.pkg.github.com"
-    : `https://nuget.pkg.${domain.replace(/^api\./, "")}`;
+  // Handle github.com case
+  if (hostname === "api.github.com") {
+    return "https://nuget.pkg.github.com";
+  }
+
+  // Handle GitHub Data Residency case with subdomain pattern: api.SUBDOMAIN.ghe.com
+  if (hostname.startsWith("api.")) {
+    // Remove the "api." prefix to get the base domain
+    const baseDomain = hostname.substring(4);
+    return `https://nuget.pkg.${baseDomain}`;
+  }
+
+  // Fallback for other patterns
+  return `https://nuget.pkg.${hostname}`;
 }
 
 /**
