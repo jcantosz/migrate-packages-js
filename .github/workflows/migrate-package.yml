@@ -86,11 +86,8 @@ jobs:
         if: always()
         id: write-output
         run: |
-          echo ${{ steps.migrate-nuget.outputs.result-summary }} > $GITHUB_STEP_SUMMARY
-          # echo "NuGet packages migrated: ${{ steps.migrate-nuget.outputs.result }}"
-          # echo "NuGet packages failed: ${{ steps.migrate-nuget.outputs.failed }}"
-          # echo "NuGet packages succeeded: ${{ steps.migrate-nuget.outputs.succeeded }}"
-          # echo "NuGet packages skipped: ${{ steps.migrate-nuget.outputs.skipped }}"
+          # Echo with quotes to prevent shell interpretation
+          echo '${{ steps.migrate-nuget.outputs.result-summary }}' > $GITHUB_STEP_SUMMARY
 
   migrate-npm:
     runs-on: ubuntu-latest
@@ -111,11 +108,13 @@ jobs:
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
           packages: ${{ needs.get-packages.outputs.npm-packages }}
+      
       - name: Write step summary
         if: always()
         id: write-output
         run: |
-          echo ${{ steps.migrate-npm.outputs.result-summary }} > $GITHUB_STEP_SUMMARY
+          # Echo with quotes to prevent shell interpretation
+          echo '${{ steps.migrate-npm.outputs.result-summary }}' > $GITHUB_STEP_SUMMARY
 
   migrate-container:
     runs-on: ubuntu-latest
@@ -141,8 +140,5 @@ jobs:
         if: always()
         id: write-output
         run: |
-          echo ${{ steps.migrate-container.outputs.result-summary }} > $GITHUB_STEP_SUMMARY
-          # echo "Container packages migrated: ${{ steps.migrate-container.outputs.result }}"
-          # echo "Container packages failed: ${{ steps.migrate-container.outputs.failed }}"
-          # echo "Container packages succeeded: ${{ steps.migrate-container.outputs.succeeded }}"
-          # echo "Container packages skipped: ${{ steps.migrate-container.outputs.skipped }}"
+          # Echo with quotes to prevent shell interpretation
+          echo '${{ steps.migrate-container.outputs.result-summary }}' > $GITHUB_STEP_SUMMARY
