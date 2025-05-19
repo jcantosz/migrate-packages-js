@@ -4,6 +4,8 @@ on:
       repo-name:
         description: "Repository name to filter packages (leave empty for packages without repo)"
         required: false
+run-name: Migrating ${{ inputs.repo-name || 'Org'}} packages
+name: Migrate GitHub Packages
 
 jobs:
   get-packages:
