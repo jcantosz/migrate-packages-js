@@ -32032,7 +32032,7 @@ async function run() {
     const sourceAPIUrl = core.getInput("source-api-url", { required: true });
     const ghSourcePat = core.getInput("gh-source-pat", { required: true });
     const repoName = core.getInput("repo-name");
-    const packageTypesInput = core.getInput("package-types") || "npm, nuget, container";
+
     const packageTypes = packageTypesInput.split(",").map((type) => type.trim());
 
     // Create authenticated client

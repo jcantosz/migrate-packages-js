@@ -40270,11 +40270,11 @@ function getNpmRegistryUrl(apiUrl, customRegistryUrl) {
   if (hostname.startsWith("api.")) {
     // Remove the "api." prefix to get the base domain
     const baseDomain = hostname.substring(4);
-    return `https://npm.pkg.${baseDomain}`;
+    return `https://npm.${baseDomain}`;
   }
 
   // Fallback for other patterns
-  return `https://npm.pkg.${hostname}`;
+  return `https://npm.${hostname}`;
 }
 
 /**
@@ -40298,11 +40298,11 @@ function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
   if (hostname.startsWith("api.")) {
     // Remove the "api." prefix to get the base domain
     const baseDomain = hostname.substring(4);
-    return `https://nuget.pkg.${baseDomain}`;
+    return `https://nuget.${baseDomain}`;
   }
 
   // Fallback for other patterns
-  return `https://nuget.pkg.${hostname}`;
+  return `https://nuget.${hostname}`;
 }
 
 /**
