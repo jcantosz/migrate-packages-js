@@ -31077,8 +31077,8 @@ __nccwpck_require__.d(common_utils_namespaceObject, {
 });
 
 // EXTERNAL MODULE: ../node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(2341);
-var core_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(core, 2);
+var lib_core = __nccwpck_require__(2341);
+var core_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(lib_core, 2);
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __nccwpck_require__(7147);
 // EXTERNAL MODULE: external "path"
@@ -40334,8 +40334,6 @@ function cleanupTempDir(dirPath) {
  * Output results to GitHub Actions
  */
 function outputResults(results, packageType) {
-  const core = __nccwpck_require__(2341);
-
   // Calculate totals
   const totalPackages = results.length;
   const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
@@ -40408,7 +40406,7 @@ function formatPackageName(packageName, org, packageType) {
 function setupEnvironment() {
   // Create a temp directory
   const tempDir = external_path_.join(external_os_.tmpdir(), "nuget-migrate-" + Math.random().toString(36).substring(2, 10));
-  core.info(`Creating temp directory: ${tempDir}`);
+  lib_core.info(`Creating temp directory: ${tempDir}`);
 
   external_fs_.mkdirSync(tempDir, { recursive: true });
   return tempDir;
@@ -40421,7 +40419,7 @@ function setupEnvironment() {
 function checkDotNetInstallation() {
   try {
     (0,external_child_process_.execSync)("dotnet --version", { stdio: "pipe" });
-    core.info("dotnet is installed");
+    lib_core.info("dotnet is installed");
   } catch (err) {
     throw new Error("dotnet is not installed or not accessible. dotnet is required for NuGet package migration.");
   }
@@ -40437,7 +40435,7 @@ function installGpr(tempDir) {
     const toolsDir = external_path_.join(tempDir, "tools");
     external_fs_.mkdirSync(toolsDir, { recursive: true });
 
-    core.info("Installing gpr tool...");
+    lib_core.info("Installing gpr tool...");
     (0,external_child_process_.spawnSync)("dotnet", ["tool", "install", "gpr", "--tool-path", toolsDir], {
       stdio: "inherit",
       encoding: "utf-8",
@@ -40452,7 +40450,7 @@ function installGpr(tempDir) {
       throw new Error(`Failed to install gpr tool. Could not find ${gprPath}`);
     }
 
-    core.info(`Successfully installed gpr at ${gprPath}`);
+    lib_core.info(`Successfully installed gpr at ${gprPath}`);
     return gprPath;
   } catch (err) {
     throw new Error(`Error installing gpr: ${err.message}`);
@@ -40476,10 +40474,10 @@ async function src_fetchVersions(octokit, org, packageName) {
 
     // Extract just the version names
     const versionNames = versions.map((version) => version.name);
-    core.info(`Found ${versionNames.length} versions for package ${packageName}`);
+    lib_core.info(`Found ${versionNames.length} versions for package ${packageName}`);
     return versionNames;
   } catch (err) {
-    core.warning(`Error fetching versions for NuGet package ${packageName}: ${err.message}`);
+    lib_core.warning(`Error fetching versions for NuGet package ${packageName}: ${err.message}`);
     return [];
   }
 }
@@ -40499,7 +40497,7 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
     const outputPath = external_path_.join(outputDir, `${packageName}_${version}.nupkg`);
     const url = `${sourceRegistryUrl}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
 
-    core.info(`Downloading ${packageName} version ${version} from ${url}`);
+    lib_core.info(`Downloading ${packageName} version ${version} from ${url}`);
 
     const response = await lib_axios({
       method: "get",
@@ -40512,7 +40510,7 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
     });
 
     external_fs_.writeFileSync(outputPath, response.data);
-    core.info(`Successfully downloaded ${packageName} version ${version} to ${outputPath}`);
+    lib_core.info(`Successfully downloaded ${packageName} version ${version} to ${outputPath}`);
 
     return outputPath;
   } catch (err) {
@@ -40527,7 +40525,7 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
  */
 function fixNuGetPackage(packagePath) {
   try {
-    core.info(`Fixing NuGet package: ${packagePath}`);
+    lib_core.info(`Fixing NuGet package: ${packagePath}`);
 
     // Use adm-zip to remove the problematic files
     const zip = new _notfoundadm_zip(packagePath);
@@ -40556,10 +40554,10 @@ function fixNuGetPackage(packagePath) {
     // Write the fixed zip back to disk
     zip.writeZip(packagePath);
 
-    core.info(`Successfully fixed NuGet package: ${packagePath}`);
+    lib_core.info(`Successfully fixed NuGet package: ${packagePath}`);
     return true;
   } catch (err) {
-    core.warning(`Failed to fix NuGet package: ${err.message}`);
+    lib_core.warning(`Failed to fix NuGet package: ${err.message}`);
     return false;
   }
 }
@@ -40575,7 +40573,7 @@ function fixNuGetPackage(packagePath) {
  */
 function pushPackage(packagePath, gprPath, targetOrg, repoName, token) {
   try {
-    core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
+    lib_core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
 
     const result = (0,external_child_process_.spawnSync)(
       gprPath,
@@ -40590,10 +40588,10 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token) {
       throw new Error(`GPR push failed: ${result.stderr || result.stdout}`);
     }
 
-    core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
+    lib_core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
     return true;
   } catch (err) {
-    core.warning(`Failed to push package: ${err.message}`);
+    lib_core.warning(`Failed to push package: ${err.message}`);
     return false;
   }
 }
@@ -40629,7 +40627,7 @@ async function migrateVersion(packageName, version, repoName, context, tempDir, 
 
     return true;
   } catch (err) {
-    core.warning(`Failed to migrate ${packageName} version ${version}: ${err.message}`);
+    lib_core.warning(`Failed to migrate ${packageName} version ${version}: ${err.message}`);
     return false;
   }
 }
@@ -40650,13 +40648,13 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
   const packageName = pkg.name;
   const repoName = pkg.repository?.name || packageName; // If no repo, use package name
 
-  core.info(`Migrating NuGet package: ${packageName} from repo: ${repoName}`);
+  lib_core.info(`Migrating NuGet package: ${packageName} from repo: ${repoName}`);
 
   // Get all versions for this NuGet package
   const versions = await src_fetchVersions(octokitSource, sourceOrg, packageName);
 
   if (versions.length === 0) {
-    core.warning(`No versions found for package ${packageName}`);
+    lib_core.warning(`No versions found for package ${packageName}`);
     return {
       package: packageName,
       versionsSucceeded: 0,
@@ -40710,7 +40708,7 @@ function formatResults(results) {
 function src_parsePackagesInput(packagesJson) {
   try {
     const packages = JSON.parse(packagesJson);
-    core.info(`Found ${packages.length} NuGet packages to migrate`);
+    lib_core.info(`Found ${packages.length} NuGet packages to migrate`);
     return packages;
   } catch (err) {
     throw new Error(`Invalid packages input: ${err.message}`);
@@ -40723,10 +40721,10 @@ function src_parsePackagesInput(packagesJson) {
  */
 function cleanUp(tempDir) {
   try {
-    core.info(`Cleaning up temporary directory: ${tempDir}`);
+    lib_core.info(`Cleaning up temporary directory: ${tempDir}`);
     external_fs_.rmSync(tempDir, { recursive: true, force: true });
   } catch (err) {
-    core.warning(`Failed to clean up temporary directory: ${err.message}`);
+    lib_core.warning(`Failed to clean up temporary directory: ${err.message}`);
   }
 }
 
@@ -40750,12 +40748,12 @@ async function run() {
     } = getCommonInputs(core_namespaceObject);
 
     // Parse packages input
-    const packagesJson = core.getInput("packages", { required: true });
+    const packagesJson = lib_core.getInput("packages", { required: true });
     const packages = src_parsePackagesInput(packagesJson);
 
     if (packages.length === 0) {
-      core.info("No NuGet packages to migrate");
-      core.setOutput("result", JSON.stringify([]));
+      lib_core.info("No NuGet packages to migrate");
+      lib_core.setOutput("result", JSON.stringify([]));
       return;
     }
 
@@ -40793,11 +40791,11 @@ async function run() {
 
     // Output results
     const summary = formatResults(results);
-    core.info(summary);
-    core.setOutput("result", JSON.stringify(results));
-    core.info("NuGet packages migration complete.");
+    lib_core.info(summary);
+    lib_core.setOutput("result", JSON.stringify(results));
+    lib_core.info("NuGet packages migration complete.");
   } catch (error) {
-    core.setFailed(`Action failed: ${error.message}`);
+    lib_core.setFailed(`Action failed: ${error.message}`);
   } finally {
     // Clean up temp directory
     if (tempDir) {

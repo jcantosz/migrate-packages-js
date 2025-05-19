@@ -74642,8 +74642,6 @@ function cleanupTempDir(dirPath) {
  * Output results to GitHub Actions
  */
 function outputResults(results, packageType) {
-  const core = __nccwpck_require__(2341);
-
   // Calculate totals
   const totalPackages = results.length;
   const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
@@ -74651,22 +74649,22 @@ function outputResults(results, packageType) {
   const totalSkipped = results.filter((r) => r.skipped).length;
 
   // Log summary
-  core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
-  core.info(`Total packages processed: ${totalPackages}`);
-  core.info(`Successful version migrations: ${totalSuccess}`);
-  core.info(`Failed version migrations: ${totalFailed}`);
+  lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
+  lib_core.info(`Total packages processed: ${totalPackages}`);
+  lib_core.info(`Successful version migrations: ${totalSuccess}`);
+  lib_core.info(`Failed version migrations: ${totalFailed}`);
   if (totalSkipped > 0) {
-    core.info(`Skipped packages: ${totalSkipped}`);
+    lib_core.info(`Skipped packages: ${totalSkipped}`);
   }
 
   // Set output
-  core.setOutput("result", JSON.stringify(results));
+  lib_core.setOutput("result", JSON.stringify(results));
 
   // Set job status based on results
   if (totalFailed > 0 && totalSuccess === 0) {
-    core.setFailed(`All ${packageType} package migrations failed`);
+    lib_core.setFailed(`All ${packageType} package migrations failed`);
   } else if (totalFailed > 0) {
-    core.warning(`Some ${packageType} package migrations failed`);
+    lib_core.warning(`Some ${packageType} package migrations failed`);
   }
 }
 

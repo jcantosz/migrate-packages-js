@@ -148,8 +148,6 @@ export function cleanupTempDir(dirPath) {
  * Output results to GitHub Actions
  */
 export function outputResults(results, packageType) {
-  const core = require("@actions/core");
-
   // Calculate totals
   const totalPackages = results.length;
   const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
