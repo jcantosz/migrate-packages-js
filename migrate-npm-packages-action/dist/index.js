@@ -74816,8 +74816,17 @@ function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
  * Migrate a single npm package version
  */
 async function migrateVersion(packageName, versionName, context) {
-  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg, targetApiUrl } =
-    context;
+  const {
+    sourceOrg,
+    sourceApiUrl,
+    sourceRegistryUrl,
+    ghSourcePat,
+    tempDir,
+    npmrcPath,
+    targetOrg,
+    targetApiUrl,
+    repoName,
+  } = context;
   const versionTempDir = external_path_.join(tempDir, `${packageName}-${versionName}`);
 
   // Clean up any previous directory
@@ -74863,21 +74872,16 @@ async function migrateVersion(packageName, versionName, context) {
     let targetApiHostname = new URL(targetApiUrl).hostname;
     // Remove 'api.' prefix if present (e.g., convert api.github.com to github.com)
     targetApiHostname = targetApiHostname.startsWith("api.") ? targetApiHostname.substring(4) : targetApiHostname;
-    const repoName = pkgJson.name.replace(`@${targetOrg}/`, "");
 
     const repoUrl = `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`;
 
     core.info(`Setting repo url in package.json to "${repoUrl}"`);
     if (!pkgJson.repository) {
-      core.info("Repository key not found, adding");
+      core.info("Repository key not found, org level, doing nothing");
       // Add repository field if it doesn't exist
-      pkgJson.repository = {
-        type: "git",
-        url: repoUrl,
-      };
     } else if (typeof pkgJson.repository === "string") {
       // Update repository string
-      core.info("Repository key not found updating");
+      core.info("Repository key found, updating");
       pkgJson.repository = repoUrl;
     } else if (typeof pkgJson.repository === "object") {
       // Update repository.url
@@ -74958,6 +74962,9 @@ async function run() {
       ghTargetPat,
     } = getCommonInputs(core_namespaceObject);
 
+    // Get the repo-name input (optional)
+    const repoName = core.getInput("repo-name", { required: false });
+
     // Parse packages from input using the shared utility
     const packagesJson = core.getInput("packages", { required: true });
     const packages = parsePackagesInput(packagesJson, "npm");
@@ -74995,6 +75002,7 @@ async function run() {
       ghTargetPat,
       tempDir,
       npmrcPath,
+      repoName,
     };
 
     // Migrate all packages

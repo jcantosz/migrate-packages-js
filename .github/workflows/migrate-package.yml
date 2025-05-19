@@ -101,6 +101,7 @@ jobs:
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
           packages: ${{ needs.get-packages.outputs.npm-packages }}
+          repo-name: ${{ github.event.inputs.repo-name }} # needed to fill in the package metadata
 
   migrate-container:
     runs-on: ubuntu-latest
