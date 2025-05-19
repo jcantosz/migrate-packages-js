@@ -5,6 +5,7 @@ This repository contains GitHub Actions for migrating packages (npm, container, 
 ## Overview
 
 These actions allow you to migrate the following package types:
+
 - NPM packages
 - Container packages (Docker)
 - NuGet packages
@@ -68,6 +69,7 @@ Migrates NuGet packages by downloading the package files and republishing them t
 ## Post-Migration Steps
 
 After migration, you may need to manually:
+
 - Set the correct visibility for each package
 - Re-establish repository connections
 - Set up appropriate permissions

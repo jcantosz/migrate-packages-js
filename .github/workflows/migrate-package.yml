@@ -56,6 +56,9 @@ jobs:
           echo "NuGet packages: ${{ needs.get-packages.outputs.nuget-packages }}"
           echo "RubyGems packages: ${{ needs.get-packages.outputs.rubygems-packages }}"
           echo "Maven packages: ${{ needs.get-packages.outputs.maven-packages }}"
+          echo "------"
+          echo "output: ${{ needs.get-packages.outputs }}"
+          echo "output: ${{ toJson(needs.get-packages.outputs) }}"
 
   migrate-nuget:
     runs-on: ubuntu-latest
