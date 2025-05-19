@@ -15,7 +15,7 @@ inputs:
     description: "Repository name to filter packages by. If not provided, will get packages without a linked repository"
     required: false
   package-types:
-    description: "The package types to gather information about, comma seperated"
+    description: "The package types to gather information about, comma separated. Options are: npm, maven, rubygems, docker, nuget, container"
     required: false
     default: "npm, nuget, container"
 outputs:
@@ -23,18 +23,26 @@ outputs:
     description: "JSON array of npm packages found matching criteria"
   npm-count:
     description: "Number of npm packages found"
-  docker-packages:
-    description: "JSON array of Docker packages found matching criteria"
-  docker-count:
-    description: "Number of Docker packages found"
+  container-packages:
+    description: "JSON array of Container packages found matching criteria"
+  container-count:
+    description: "Number of Container packages found"
   nuget-packages:
     description: "JSON array of NuGet packages found matching criteria"
   nuget-count:
     description: "Number of NuGet packages found"
+  rubygems-packages:
+    description: "JSON array of RubyGem packages found matching criteria"
+  rubygems-count:
+    description: "Number of RubyGem packages found"
+  maven-packages:
+    description: "JSON array of Maven packages found matching criteria"
+  maven-count:
+    description: "Number of Maven packages found"
   all-packages:
     description: "JSON object containing all packages by type"
   total-count:
     description: "Total number of packages found across all types"
 runs:
-  using: "node16"
-  main: "src/index.js"
+  using: "node20"
+  main: "dist/index.js"

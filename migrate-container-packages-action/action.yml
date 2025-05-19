@@ -34,5 +34,5 @@ outputs:
   result:
     description: "The results of the migration process as a JSON array with success/failure counts for each package"
 runs:
-  using: "node16"
-  main: "src/index.js"
+  using: "node20"
+  main: "dist/index.js"
