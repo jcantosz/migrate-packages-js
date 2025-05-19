@@ -311,8 +311,8 @@ function generateActionSummary(results) {
   // Add results list with core.summary.addList
   core.summary.addHeading('Per-Package Results:', 3);
   
-  // Create an array of formatted results for the list
-  const resultItems = results.map(r => {
+  // Create an array of formatted results for the list WITH Markdown formatting
+  const markdownResultItems = results.map(r => {
     if (r.skipped) {
       return `**${r.package}**: SKIPPED (${r.reason || 'No reason provided'})`;
     } else {
@@ -321,13 +321,22 @@ function generateActionSummary(results) {
   });
   
   // Add the list to the summary
-  core.summary.addList(resultItems);
+  core.summary.addList(markdownResultItems);
 
   // Write the summary to the output
   core.summary.write();
   
-  // Build text summary by joining the result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + resultItems.join('\n');
+  // Create plain text results WITHOUT Markdown formatting
+  const plainTextResultItems = results.map(r => {
+    if (r.skipped) {
+      return `${r.package}: SKIPPED (${r.reason || 'No reason provided'})`;
+    } else {
+      return `${r.package}: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed`;
+    }
+  });
+  
+  // Build text summary by joining the plain text result items with newlines
+  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join('\n');
   
   // Return the text summary for console output and action outputs
   return textSummary;
