@@ -178,18 +178,10 @@ export function outputResults(results, packageType) {
   const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
   const totalSkipped = results.filter((r) => r.skipped).length;
 
-  let summary = "Migration completed. Summary:\n";
-  
-  // Add detailed information for each package
-  results.forEach((r) => {
-    if (r.skipped) {
-      summary += `- ${r.package}: SKIPPED (${r.reason || 'No reason provided'})\n`;
-    } else {
-      summary += `- ${r.package}: ${r.succeeded} versions succeeded, ${r.failed} versions failed\n`;
-    }
-  });
+  // Generate both GitHub markdown summary and plain text summary
+  const summary = generateActionSummary(results, packageType);
 
-  // Log summary
+  // Log summary to console
   core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
   core.info(`Total packages processed: ${totalPackages}`);
   core.info(`Successful version migrations: ${totalSuccess}`);
@@ -209,6 +201,65 @@ export function outputResults(results, packageType) {
   } else if (totalFailed > 0) {
     core.warning(`Some ${packageType} package migrations failed`);
   }
+}
+
+/**
+ * Generate a GitHub Actions summary using core.summary and return the text summary
+ * @param {Array} results - Migration results
+ * @param {string} packageType - Type of package (npm, nuget, container)
+ * @returns {string} - Text summary for console output and action outputs
+ */
+function generateActionSummary(results, packageType) {
+  // Calculate totals
+  const totalPackages = results.length;
+  const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
+  const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
+  const totalSkipped = results.filter((r) => r.skipped).length;
+
+  // Start building the GitHub summary
+  core.summary
+    .addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
+    .addRaw("Migration completed.")
+    .addBreak()
+    .addBreak();
+
+  // Add statistics table
+  core.summary
+    .addTable([
+      [
+        { data: "Statistics", header: true },
+        { data: "Count", header: true },
+      ],
+      ["Total Packages", totalPackages.toString()],
+      ["Versions Succeeded", totalSuccess.toString()],
+      ["Versions Failed", totalFailed.toString()],
+      ["Packages Skipped", totalSkipped.toString()],
+    ])
+    .addBreak();
+
+  // Add results list with core.summary.addList
+  core.summary.addHeading("Per-Package Results:", 3);
+
+  // Create an array of formatted results for the list
+  const resultItems = results.map((r) => {
+    if (r.skipped) {
+      return `**${r.package}**: SKIPPED (${r.reason || "No reason provided"})`;
+    } else {
+      return `**${r.package}**: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
+    }
+  });
+
+  // Add the list to the summary
+  core.summary.addList(resultItems);
+
+  // Write the summary to the output
+  core.summary.write();
+
+  // Build text summary by joining the result items with newlines
+  const textSummary = "Migration completed. Summary:\n" + resultItems.join("\n");
+
+  // Return the text summary for console output and action outputs
+  return textSummary;
 }
 
 /**
