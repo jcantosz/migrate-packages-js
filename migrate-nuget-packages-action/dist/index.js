@@ -40408,7 +40408,7 @@ function generateActionSummary(results, packageType) {
     .addRaw("Migration completed.")
     .addBreak()
     .addBreak();
-  
+
   // Add statistics table
   core.summary
     .addTable([
@@ -40449,10 +40449,10 @@ function generateActionSummary(results, packageType) {
       return `${r.package}: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
     }
   });
-  
+
   // Build text summary by joining the plain text result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join('\n');
-  
+  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join("\n");
+
   // Return the text summary for console output and action outputs
   return textSummary;
 }

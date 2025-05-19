@@ -31881,56 +31881,56 @@ function generateActionSummary(results) {
   const totalDigestsFailed = results.reduce((acc, r) => acc + (r.digestsFailed || 0), 0);
   const totalTagsSucceeded = results.reduce((acc, r) => acc + (r.tagsSucceeded || 0), 0);
   const totalTagsFailed = results.reduce((acc, r) => acc + (r.tagsFailed || 0), 0);
-  const totalSkipped = results.filter(r => r.skipped).length;
+  const totalSkipped = results.filter((r) => r.skipped).length;
 
   // Start building the GitHub summary
-  core.summary.addHeading('Container Package Migration', 2)
-    .addRaw('Migration completed.')
-    .addBreak()
-    .addBreak();
-  
+  core.summary.addHeading("Container Package Migration", 2).addRaw("Migration completed.").addBreak().addBreak();
+
   // Add statistics table
   core.summary.addTable([
-      [{ data: 'Statistics', header: true }, { data: 'Count', header: true }],
-      ['Total Packages', totalPackages.toString()],
-      ['Total Digests Succeeded', totalDigestsSucceeded.toString()],
-      ['Total Digests Failed', totalDigestsFailed.toString()],
-      ['Total Tags Succeeded', totalTagsSucceeded.toString()],
-      ['Total Tags Failed', totalTagsFailed.toString()],
-      ['Packages Skipped', totalSkipped.toString()]
+      [
+        { data: "Statistics", header: true },
+        { data: "Count", header: true },
+      ],
+      ["Total Packages", totalPackages.toString()],
+      ["Total Digests Succeeded", totalDigestsSucceeded.toString()],
+      ["Total Digests Failed", totalDigestsFailed.toString()],
+      ["Total Tags Succeeded", totalTagsSucceeded.toString()],
+      ["Total Tags Failed", totalTagsFailed.toString()],
+      ["Packages Skipped", totalSkipped.toString()],
     ])
     .addBreak();
 
   // Add results list with core.summary.addList
-  core.summary.addHeading('Per-Package Results:', 3);
-  
+  core.summary.addHeading("Per-Package Results:", 3);
+
   // Create an array of formatted results for the list WITH Markdown formatting
-  const markdownResultItems = results.map(r => {
+  const markdownResultItems = results.map((r) => {
     if (r.skipped) {
-      return `**${r.package}**: SKIPPED (${r.reason || 'No reason provided'})`;
+      return `**${r.package}**: SKIPPED (${r.reason || "No reason provided"})`;
     } else {
       return `**${r.package}**: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed`;
     }
   });
-  
+
   // Add the list to the summary
   core.summary.addList(markdownResultItems);
 
   // Write the summary to the output
   core.summary.write();
-  
+
   // Create plain text results WITHOUT Markdown formatting
-  const plainTextResultItems = results.map(r => {
+  const plainTextResultItems = results.map((r) => {
     if (r.skipped) {
-      return `${r.package}: SKIPPED (${r.reason || 'No reason provided'})`;
+      return `${r.package}: SKIPPED (${r.reason || "No reason provided"})`;
     } else {
       return `${r.package}: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed`;
     }
   });
-  
+
   // Build text summary by joining the plain text result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join('\n');
-  
+  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join("\n");
+
   // Return the text summary for console output and action outputs
   return textSummary;
 }
@@ -32009,7 +32009,7 @@ async function run() {
 
     // Generate summary and output results
     const summary = generateActionSummary(results);
-    
+
     // Log summary to console
     core.info(`\n=== CONTAINER Migration Summary ===`);
     core.info(`Total packages processed: ${results.length}`);
@@ -32022,19 +32022,18 @@ async function run() {
     core.info(`Total tags succeeded: ${totalTagsSucceeded}`);
     core.info(`Total tags failed: ${totalTagsFailed}`);
     core.info(summary);
-    
+
     // Set outputs
     core.setOutput("result", JSON.stringify(results));
     core.setOutput("result-summary", summary);
-    
+
     // Set job status based on results
-    if ((totalDigestsFailed > 0 || totalTagsFailed > 0) && 
-        totalDigestsSucceeded === 0 && totalTagsSucceeded === 0) {
+    if ((totalDigestsFailed > 0 || totalTagsFailed > 0) && totalDigestsSucceeded === 0 && totalTagsSucceeded === 0) {
       core.setFailed(`All container package migrations failed`);
     } else if (totalDigestsFailed > 0 || totalTagsFailed > 0) {
       core.warning(`Some container package migrations failed`);
     }
-    
+
     core.info("Container migration complete.");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);

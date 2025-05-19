@@ -74715,7 +74715,7 @@ function generateActionSummary(results, packageType) {
     .addRaw("Migration completed.")
     .addBreak()
     .addBreak();
-  
+
   // Add statistics table
   lib_core.summary.addTable([
       [
@@ -74755,10 +74755,10 @@ function generateActionSummary(results, packageType) {
       return `${r.package}: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
     }
   });
-  
+
   // Build text summary by joining the plain text result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join('\n');
-  
+  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join("\n");
+
   // Return the text summary for console output and action outputs
   return textSummary;
 }
@@ -74816,7 +74816,7 @@ function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
  * Migrate a single npm package version
  */
 async function migrateVersion(packageName, versionName, context) {
-  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg } = context;
+  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg, targetApiUrl } = context;
   const versionTempDir = external_path_.join(tempDir, `${packageName}-${versionName}`);
 
   // Clean up any previous directory
@@ -74857,6 +74857,30 @@ async function migrateVersion(packageName, versionName, context) {
     const pkgJsonPath = external_path_.join(packageDir, "package.json");
     const pkgJson = JSON.parse(external_fs_.readFileSync(pkgJsonPath, "utf8"));
     pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
+    
+    // Step 4a: Update repository URL for repo migration
+    let targetApiHostname = new URL(targetApiUrl).hostname;
+    // Remove 'api.' prefix if present (e.g., convert api.github.com to github.com)
+    targetApiHostname = targetApiHostname.startsWith('api.') ? targetApiHostname.substring(4) : targetApiHostname;
+    const repoName = pkgJson.name.replace(`@${targetOrg}/`, '');
+    
+    if (!pkgJson.repository) {
+      // Add repository field if it doesn't exist
+      pkgJson.repository = {
+        type: "git",
+        url: `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`
+      };
+    } else if (typeof pkgJson.repository === 'string') {
+      // Update repository string
+      pkgJson.repository = `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`;
+    } else if (typeof pkgJson.repository === 'object') {
+      // Update repository.url
+      pkgJson.repository.url = `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`;
+      if (!pkgJson.repository.type) {
+        pkgJson.repository.type = "git";
+      }
+    }
+    
     external_fs_.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
 
     // Step 5: Publish the package to the target registry

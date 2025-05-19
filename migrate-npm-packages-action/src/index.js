@@ -30,7 +30,7 @@ function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
  * Migrate a single npm package version
  */
 async function migrateVersion(packageName, versionName, context) {
-  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg } = context;
+  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg, targetApiUrl } = context;
   const versionTempDir = path.join(tempDir, `${packageName}-${versionName}`);
 
   // Clean up any previous directory
@@ -71,6 +71,30 @@ async function migrateVersion(packageName, versionName, context) {
     const pkgJsonPath = path.join(packageDir, "package.json");
     const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
     pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
+    
+    // Step 4a: Update repository URL for repo migration
+    let targetApiHostname = new URL(targetApiUrl).hostname;
+    // Remove 'api.' prefix if present (e.g., convert api.github.com to github.com)
+    targetApiHostname = targetApiHostname.startsWith('api.') ? targetApiHostname.substring(4) : targetApiHostname;
+    const repoName = pkgJson.name.replace(`@${targetOrg}/`, '');
+    
+    if (!pkgJson.repository) {
+      // Add repository field if it doesn't exist
+      pkgJson.repository = {
+        type: "git",
+        url: `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`
+      };
+    } else if (typeof pkgJson.repository === 'string') {
+      // Update repository string
+      pkgJson.repository = `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`;
+    } else if (typeof pkgJson.repository === 'object') {
+      // Update repository.url
+      pkgJson.repository.url = `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`;
+      if (!pkgJson.repository.type) {
+        pkgJson.repository.type = "git";
+      }
+    }
+    
     fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
 
     // Step 5: Publish the package to the target registry
