@@ -31600,12 +31600,16 @@ var external_child_process_ = __nccwpck_require__(2081);
 
 
 /**
- * Get registry URL based on host
- * @param {string} host - GitHub host (e.g., github.com)
+ * Get registry URL based on API URL or use custom registry URL if provided
+ * @param {string} apiUrl - GitHub API URL (e.g., https://api.github.com)
+ * @param {string|null} customRegistryUrl - Custom registry URL if provided
  * @returns {string} - Registry URL
  */
-function getRegistryUrl(host) {
-  return host === "github.com" ? "ghcr.io" : `containers.${host}`;
+function getRegistryUrl(apiUrl, customRegistryUrl) {
+  if (customRegistryUrl) {
+    return customRegistryUrl;
+  }
+  return apiUrl.includes("github.com") ? "ghcr.io" : `containers.${new URL(apiUrl).hostname}`;
 }
 
 /**
@@ -31669,12 +31673,21 @@ function executeSkopeoCommand(skopeoCommand) {
  * @returns {boolean} - Success status
  */
 async function migrateImageReference(packageName, reference, context, isDigest) {
-  const { sourceOrg, sourceHost, targetOrg, targetHost, ghSourcePat, ghTargetPat } = context;
+  const {
+    sourceOrg,
+    sourceApiUrl,
+    sourceRegistryUrl,
+    targetOrg,
+    targetApiUrl,
+    targetRegistryUrl,
+    ghSourcePat,
+    ghTargetPat,
+  } = context;
 
   try {
     // Determine registries and build image references
-    const sourceRegistry = getRegistryUrl(sourceHost);
-    const targetRegistry = getRegistryUrl(targetHost);
+    const sourceRegistry = getRegistryUrl(sourceApiUrl, sourceRegistryUrl);
+    const targetRegistry = getRegistryUrl(targetApiUrl, targetRegistryUrl);
 
     // Build source and target image references
     const sourceImage = buildImageReference(sourceRegistry, sourceOrg, packageName, reference, isDigest);
@@ -31861,9 +31874,11 @@ async function run() {
   try {
     // Get action inputs
     const sourceOrg = core.getInput("source-org", { required: true });
-    const sourceHost = core.getInput("source-host", { required: true });
+    const sourceApiUrl = core.getInput("source-api-url", { required: true });
+    const sourceRegistryUrl = core.getInput("source-registry-url", { required: false });
     const targetOrg = core.getInput("target-org", { required: true });
-    const targetHost = core.getInput("target-host", { required: true });
+    const targetApiUrl = core.getInput("target-api-url", { required: true });
+    const targetRegistryUrl = core.getInput("target-registry-url", { required: false });
     const ghSourcePat = core.getInput("gh-source-pat", { required: true });
     const ghTargetPat = core.getInput("gh-target-pat", { required: true });
 
@@ -31886,16 +31901,18 @@ async function run() {
     // Set up Octokit client
     const octokitSource = new dist_src_Octokit({
       auth: ghSourcePat,
-      baseUrl: `https://${sourceHost}/api/v3`,
+      baseUrl: sourceApiUrl,
     });
 
     // Prepare context with all configuration
     const context = {
       octokitSource,
       sourceOrg,
-      sourceHost,
+      sourceApiUrl,
+      sourceRegistryUrl,
       targetOrg,
-      targetHost,
+      targetApiUrl,
+      targetRegistryUrl,
       ghSourcePat,
       ghTargetPat,
     };

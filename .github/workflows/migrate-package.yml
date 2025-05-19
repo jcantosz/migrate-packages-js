@@ -1,0 +1,107 @@
+on:
+  workflow_dispatch:
+    inputs:
+      repo-name:
+        description: "Repository name to filter packages (leave empty for packages without repo)"
+        required: false
+
+jobs:
+  get-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get packages
+        id: get-packages
+        uses: ./get-packages-action
+        with:
+          source-org: ${{ vars.source-org }}
+          source-host: ${{ vars.source-host }}
+          source-api-url: ${{ vars.source-api-url }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo-name: ${{ github.event.inputs.repo-name }}
+
+  migrate-nuget:
+    runs-on: ubuntu-latest
+    needs: get-packages
+    if: needs.get-packages.outputs.nuget-count > 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Migrate NuGet packages
+        uses: ./migrate-nuget-packages-action
+        id: migrate-nuget
+        with:
+          source-org: ${{ vars.source-org }}
+          source-api-url: ${{ vars.source-api-url }}
+          target-org: ${{ vars.target-org }}
+          target-api-url: ${{ vars.target-api-url }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ steps.get-packages.outputs.nuget-packages }}
+
+      - name: Write step summary
+        if: always()
+        id: write-output
+        run: |
+          echo ${{ steps.migrate-nuget.outputs.result }} > $GITHUB_STEP_SUMMARY
+          # echo "NuGet packages migrated: ${{ steps.migrate-nuget.outputs.result }}"
+          # echo "NuGet packages failed: ${{ steps.migrate-nuget.outputs.failed }}"
+          # echo "NuGet packages succeeded: ${{ steps.migrate-nuget.outputs.succeeded }}"
+          # echo "NuGet packages skipped: ${{ steps.migrate-nuget.outputs.skipped }}"
+
+  migrate-npm:
+    runs-on: ubuntu-latest
+    needs: get-packages
+    if: needs.get-packages.outputs.npm-count > 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Migrate npm packages
+        uses: ./migrate-npm-packages-action
+        id: migrate-npm
+        with:
+          source-org: ${{ vars.source-org }}
+          source-api-url: ${{ vars.source-api-url }}
+          target-org: ${{ vars.target-org }}
+          target-api-url: ${{ vars.target-api-url }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ steps.get-packages.outputs.npm-packages }}
+      - name: Write step summary
+        if: always()
+        id: write-output
+        run: |
+          echo ${{ steps.migrate-npm.outputs.result }} > $GITHUB_STEP_SUMMARY
+
+  migrate-container:
+    runs-on: ubuntu-latest
+    needs: get-packages
+    if: needs.get-packages.outputs.docker-count > 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Migrate Container packages
+        uses: ./migrate-container-packages-action
+        id: migrate-container
+        with:
+          source-org: ${{ vars.source-org }}
+          source-api-url: ${{ vars.source-api-url }}
+          target-org: ${{ vars.target-org }}
+          target-api-url: ${{ vars.target-api-url }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ steps.get-packages.outputs.container-packages }}
+      - name: Write step summary
+        if: always()
+        id: write-output
+        run: |
+          echo ${{ steps.migrate-container.outputs.result }} > $GITHUB_STEP_SUMMARY
+          # echo "Container packages migrated: ${{ steps.migrate-container.outputs.result }}"
+          # echo "Container packages failed: ${{ steps.migrate-container.outputs.failed }}"
+          # echo "Container packages succeeded: ${{ steps.migrate-container.outputs.succeeded }}"
+          # echo "Container packages skipped: ${{ steps.migrate-container.outputs.skipped }}"

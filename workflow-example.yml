@@ -6,17 +6,23 @@ on:
       source-org:
         description: 'Source organization name'
         required: true
-      source-host:
-        description: 'Source GitHub host'
+      source-api-url:
+        description: 'Source GitHub API URL'
         required: true
-        default: 'github.com'
+        default: 'https://api.github.com'
+      source-registry-url:
+        description: 'Source container registry URL (leave empty to derive from API URL)'
+        required: false
       target-org:
         description: 'Target organization name'
         required: true
-      target-host:
-        description: 'Target GitHub host'
+      target-api-url:
+        description: 'Target GitHub API URL'
         required: true
-        default: 'github.com'
+        default: 'https://api.github.com'
+      target-registry-url:
+        description: 'Target container registry URL (leave empty to derive from API URL)'
+        required: false
       repo-name:
         description: 'Repository name to filter packages (leave empty for packages without repo)'
         required: false
@@ -37,7 +43,7 @@ jobs:
         uses: ./get-packages-action
         with:
           source-org: ${{ github.event.inputs.source-org }}
-          source-host: ${{ github.event.inputs.source-host }}
+          source-api-url: ${{ github.event.inputs.source-api-url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           repo-name: ${{ github.event.inputs.repo-name }}
   
@@ -54,7 +60,7 @@ jobs:
         uses: ./get-packages-action
         with:
           source-org: ${{ github.event.inputs.source-org }}
-          source-host: ${{ github.event.inputs.source-host }}
+          source-api-url: ${{ github.event.inputs.source-api-url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           repo-name: ${{ github.event.inputs.repo-name }}
       
@@ -62,9 +68,9 @@ jobs:
         uses: ./migrate-npm-packages-action
         with:
           source-org: ${{ github.event.inputs.source-org }}
-          source-host: ${{ github.event.inputs.source-host }}
+          source-api-url: ${{ github.event.inputs.source-api-url }}
           target-org: ${{ github.event.inputs.target-org }}
-          target-host: ${{ github.event.inputs.target-host }}
+          target-api-url: ${{ github.event.inputs.target-api-url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
           packages: ${{ steps.get-packages.outputs.npm-packages }}
@@ -82,12 +88,22 @@ jobs:
         uses: ./get-packages-action
         with:
           source-org: ${{ github.event.inputs.source-org }}
-          source-host: ${{ github.event.inputs.source-host }}
+          source-api-url: ${{ github.event.inputs.source-api-url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           repo-name: ${{ github.event.inputs.repo-name }}
       
       - name: Migrate Docker packages
-        run: echo "TODO: Implement Docker package migration with packages: ${{ steps.get-packages.outputs.docker-packages }}"
+        uses: ./migrate-container-packages-action
+        with:
+          source-org: ${{ github.event.inputs.source-org }}
+          source-api-url: ${{ github.event.inputs.source-api-url }}
+          source-registry-url: ${{ github.event.inputs.source-registry-url }}
+          target-org: ${{ github.event.inputs.target-org }}
+          target-api-url: ${{ github.event.inputs.target-api-url }}
+          target-registry-url: ${{ github.event.inputs.target-registry-url }}
+          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ steps.get-packages.outputs.docker-packages }}
   
   migrate-nuget:
     needs: discover-packages
@@ -102,7 +118,7 @@ jobs:
         uses: ./get-packages-action
         with:
           source-org: ${{ github.event.inputs.source-org }}
-          source-host: ${{ github.event.inputs.source-host }}
+          source-api-url: ${{ github.event.inputs.source-api-url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           repo-name: ${{ github.event.inputs.repo-name }}
       

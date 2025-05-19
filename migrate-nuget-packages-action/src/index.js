@@ -6,6 +6,7 @@ import { execSync, spawnSync } from "child_process";
 import os from "os";
 import axios from "axios";
 import AdmZip from "adm-zip";
+import { getCommonInputs, createOctokitClient, getNuGetRegistryUrl } from "../../shared/utils.js";
 
 /**
  * Sets up the environment for NuGet package migration
@@ -95,15 +96,15 @@ async function fetchVersions(octokit, org, packageName) {
  * @param {string} packageName - Package name
  * @param {string} version - Package version
  * @param {string} sourceOrg - Source organization
- * @param {string} sourceHost - Source host
+ * @param {string} sourceRegistryUrl - Source registry URL
  * @param {string} token - GitHub PAT for source
  * @param {string} outputDir - Directory to save the package
  * @returns {string} - Path to the downloaded package
  */
-async function downloadPackage(packageName, version, sourceOrg, sourceHost, token, outputDir) {
+async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, token, outputDir) {
   try {
     const outputPath = path.join(outputDir, `${packageName}_${version}.nupkg`);
-    const url = `https://nuget.pkg.${sourceHost}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
+    const url = `${sourceRegistryUrl}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
 
     core.info(`Downloading ${packageName} version ${version} from ${url}`);
 
@@ -215,11 +216,11 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token) {
  * @returns {boolean} - True if successful
  */
 async function migrateVersion(packageName, version, repoName, context, tempDir, gprPath) {
-  const { sourceOrg, sourceHost, targetOrg, targetHost, ghSourcePat, ghTargetPat } = context;
+  const { sourceOrg, sourceRegistryUrl, targetOrg, targetApiUrl, ghSourcePat, ghTargetPat } = context;
 
   try {
     // Download the package
-    const packagePath = await downloadPackage(packageName, version, sourceOrg, sourceHost, ghSourcePat, tempDir);
+    const packagePath = await downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, ghSourcePat, tempDir);
 
     // Fix the package (remove duplicate entries)
     const fixResult = fixNuGetPackage(packagePath);
@@ -343,13 +344,17 @@ async function run() {
   let tempDir = null;
 
   try {
-    // Get action inputs
-    const sourceOrg = core.getInput("source-org", { required: true });
-    const sourceHost = core.getInput("source-host", { required: true });
-    const targetOrg = core.getInput("target-org", { required: true });
-    const targetHost = core.getInput("target-host", { required: true });
-    const ghSourcePat = core.getInput("gh-source-pat", { required: true });
-    const ghTargetPat = core.getInput("gh-target-pat", { required: true });
+    // Get common inputs using the shared utility
+    const {
+      sourceOrg,
+      sourceApiUrl,
+      sourceRegistryUrl,
+      targetOrg,
+      targetApiUrl,
+      targetRegistryUrl,
+      ghSourcePat,
+      ghTargetPat,
+    } = getCommonInputs(core);
 
     // Parse packages input
     const packagesJson = core.getInput("packages", { required: true });
@@ -366,19 +371,22 @@ async function run() {
     tempDir = setupEnvironment();
     const gprPath = installGpr(tempDir);
 
-    // Set up Octokit client
-    const octokitSource = new Octokit({
-      auth: ghSourcePat,
-      baseUrl: `https://${sourceHost}/api/v3`,
-    });
+    // Get registry URLs
+    const sourceNuGetRegistry = sourceRegistryUrl || getNuGetRegistryUrl(sourceApiUrl);
+    const targetNuGetRegistry = targetRegistryUrl || getNuGetRegistryUrl(targetApiUrl);
+
+    // Set up Octokit client using the shared utility
+    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
 
     // Prepare context with all configuration
     const context = {
       octokitSource,
       sourceOrg,
-      sourceHost,
+      sourceApiUrl,
+      sourceRegistryUrl: sourceNuGetRegistry,
       targetOrg,
-      targetHost,
+      targetApiUrl,
+      targetRegistryUrl: targetNuGetRegistry,
       ghSourcePat,
       ghTargetPat,
     };

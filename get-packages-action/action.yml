@@ -4,16 +4,20 @@ inputs:
   source-org:
     description: "The source organization from which to get packages"
     required: true
-  source-host:
-    description: "The source GitHub host (e.g., github.com)"
+  source-api-url:
+    description: "The source GitHub API URL (e.g., https://api.github.com)"
     required: true
-    default: "github.com"
+    default: "https://api.github.com"
   gh-source-pat:
     description: "GitHub PAT for reading packages from source host (needs read:packages scope)"
     required: true
   repo-name:
     description: "Repository name to filter packages by. If not provided, will get packages without a linked repository"
     required: false
+  package-types:
+    description: "The package types to gather information about, comma seperated"
+    required: false
+    default: "npm, nuget, container"
 outputs:
   npm-packages:
     description: "JSON array of npm packages found matching criteria"

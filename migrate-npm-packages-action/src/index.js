@@ -16,11 +16,11 @@ import {
 /**
  * Write .npmrc for target registry and return its path
  */
-function writeNpmrc(tempDir, targetOrg, targetHost, ghTargetPat) {
+function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
   const npmrcPath = path.join(tempDir, ".npmrc");
   fs.writeFileSync(
     npmrcPath,
-    `@${targetOrg}:registry=https://npm.pkg.${targetHost}/\n//npm.pkg.${targetHost}/:_authToken=${ghTargetPat}\n`
+    `@${targetOrg}:registry=${targetRegistryUrl}/\n//${new URL(targetRegistryUrl).host}/:_authToken=${ghTargetPat}\n`
   );
   return npmrcPath;
 }
@@ -29,7 +29,7 @@ function writeNpmrc(tempDir, targetOrg, targetHost, ghTargetPat) {
  * Migrate a single npm package version
  */
 async function migrateVersion(packageName, versionName, context) {
-  const { sourceOrg, sourceHost, ghSourcePat, tempDir, npmrcPath, targetOrg } = context;
+  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg } = context;
   const versionTempDir = path.join(tempDir, `${packageName}-${versionName}`);
 
   // Clean up any previous directory
@@ -42,7 +42,7 @@ async function migrateVersion(packageName, versionName, context) {
     core.info(`Migrating ${packageName}@${versionName}`);
 
     // Step 1: Get the tarball URL from the package manifest
-    const manifestUrl = `https://${sourceHost}/npm.pkg.github.com/@${sourceOrg}/${packageName}`;
+    const manifestUrl = `${sourceRegistryUrl}/@${sourceOrg}/${packageName}`;
     const manifest = await axios.get(manifestUrl, {
       headers: { Authorization: `token ${ghSourcePat}` },
     });
@@ -129,7 +129,16 @@ async function migratePackage(pkg, context) {
 async function run() {
   try {
     // Get common inputs using the shared utility
-    const { sourceOrg, sourceHost, targetOrg, targetHost, ghSourcePat, ghTargetPat } = getCommonInputs(core);
+    const {
+      sourceOrg,
+      sourceApiUrl,
+      sourceRegistryUrl,
+      targetOrg,
+      targetApiUrl,
+      targetRegistryUrl,
+      ghSourcePat,
+      ghTargetPat,
+    } = getCommonInputs(core);
 
     // Parse packages from input using the shared utility
     const packagesJson = core.getInput("packages", { required: true });
@@ -145,19 +154,25 @@ async function run() {
     const tempDir = path.join(process.cwd(), "temp");
     fs.mkdirSync(tempDir, { recursive: true });
 
+    // Get registry URLs
+    const sourceNpmRegistry = sourceRegistryUrl || getNpmRegistryUrl(sourceApiUrl);
+    const targetNpmRegistry = targetRegistryUrl || getNpmRegistryUrl(targetApiUrl);
+
     // Set up Octokit client using the shared utility
-    const octokitSource = createOctokitClient(ghSourcePat, sourceHost);
+    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
 
     // Set up npmrc file
-    const npmrcPath = writeNpmrc(tempDir, targetOrg, targetHost, ghTargetPat);
+    const npmrcPath = writeNpmrc(tempDir, targetOrg, targetNpmRegistry, ghTargetPat);
 
     // Prepare context with all configuration
     const context = {
       octokitSource,
       sourceOrg,
-      sourceHost,
+      sourceApiUrl,
+      sourceRegistryUrl: sourceNpmRegistry,
       targetOrg,
-      targetHost,
+      targetApiUrl,
+      targetRegistryUrl: targetNpmRegistry,
       ghSourcePat,
       ghTargetPat,
       tempDir,

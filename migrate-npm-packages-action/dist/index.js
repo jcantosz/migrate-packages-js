@@ -74506,19 +74506,23 @@ const dist_src_Octokit = Octokit.plugin(requestLog, legacyRestEndpointMethods, p
  */
 function getCommonInputs(core) {
   const sourceOrg = core.getInput("source-org", { required: true });
-  const sourceHost = core.getInput("source-host", { required: true });
+  const sourceApiUrl = core.getInput("source-api-url", { required: true });
+  const sourceRegistryUrl = core.getInput("source-registry-url", { required: false });
   const targetOrg = core.getInput("target-org", { required: true });
-  const targetHost = core.getInput("target-host", { required: true });
-  const ghSourcePat = core.getInput("source-token", { required: true });
-  const ghTargetPat = core.getInput("target-token", { required: true });
-  
+  const targetApiUrl = core.getInput("target-api-url", { required: true });
+  const targetRegistryUrl = core.getInput("target-registry-url", { required: false });
+  const ghSourcePat = core.getInput("gh-source-pat", { required: true });
+  const ghTargetPat = core.getInput("gh-target-pat", { required: true });
+
   return {
     sourceOrg,
-    sourceHost,
+    sourceApiUrl,
+    sourceRegistryUrl,
     targetOrg,
-    targetHost,
+    targetApiUrl,
+    targetRegistryUrl,
     ghSourcePat,
-    ghTargetPat
+    ghTargetPat,
   };
 }
 
@@ -74531,13 +74535,12 @@ function parsePackagesInput(packagesJson, packageType) {
     if (!Array.isArray(pkgObjects)) {
       throw new Error(`Packages input is not an array for ${packageType} migration`);
     }
-    
+
     // Filter for the specified package type if provided
     if (packageType) {
-      return pkgObjects.filter(pkg => 
-        pkg.type?.toLowerCase() === packageType.toLowerCase() || !pkg.type);
+      return pkgObjects.filter((pkg) => pkg.type?.toLowerCase() === packageType.toLowerCase() || !pkg.type);
     }
-    
+
     return pkgObjects;
   } catch (error) {
     throw new Error(`Failed to parse packages input: ${error.message}`);
@@ -74547,13 +74550,43 @@ function parsePackagesInput(packagesJson, packageType) {
 /**
  * Create an Octokit client
  */
-function createOctokitClient(token, host = 'github.com') {
+function createOctokitClient(token, apiUrl) {
   return new dist_src_Octokit({
     auth: token,
-    baseUrl: host === 'github.com' 
-      ? 'https://api.github.com'
-      : `https://${host}/api/v3`
+    baseUrl: apiUrl,
   });
+}
+
+/**
+ * Derive npm registry URL from API URL or use custom registry URL
+ */
+function utils_getNpmRegistryUrl(apiUrl, customRegistryUrl) {
+  if (customRegistryUrl) {
+    return customRegistryUrl;
+  }
+
+  // Extract the domain from API URL
+  const url = new URL(apiUrl);
+  const domain = url.hostname;
+
+  return domain === "api.github.com" ? "https://npm.pkg.github.com" : `https://npm.pkg.${domain.replace(/^api\./, "")}`;
+}
+
+/**
+ * Derive NuGet registry URL from API URL or use custom registry URL
+ */
+function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
+  if (customRegistryUrl) {
+    return customRegistryUrl;
+  }
+
+  // Extract the domain from API URL
+  const url = new URL(apiUrl);
+  const domain = url.hostname;
+
+  return domain === "api.github.com"
+    ? "https://nuget.pkg.github.com"
+    : `https://nuget.pkg.${domain.replace(/^api\./, "")}`;
 }
 
 /**
@@ -74562,31 +74595,31 @@ function createOctokitClient(token, host = 'github.com') {
 async function fetchVersions(octokitClient, org, packageName, packageType) {
   try {
     // Different package types have different version fetching logic
-    switch(packageType.toLowerCase()) {
-      case 'npm':
+    switch (packageType.toLowerCase()) {
+      case "npm":
         const npmResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: 'npm',
+          package_type: "npm",
           package_name: packageName,
-          org: org
+          org: org,
         });
         return npmResult.data;
-        
-      case 'nuget':
+
+      case "nuget":
         const nugetResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: 'nuget',
+          package_type: "nuget",
           package_name: packageName,
-          org: org
+          org: org,
         });
         return nugetResult.data;
-        
-      case 'container':
+
+      case "container":
         const containerResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: 'container',
+          package_type: "container",
           package_name: packageName,
-          org: org
+          org: org,
         });
         return containerResult.data;
-        
+
       default:
         throw new Error(`Unsupported package type: ${packageType}`);
     }
@@ -74610,13 +74643,13 @@ function cleanupTempDir(dirPath) {
  */
 function outputResults(results, packageType) {
   const core = __nccwpck_require__(2341);
-  
+
   // Calculate totals
   const totalPackages = results.length;
   const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
   const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
-  const totalSkipped = results.filter(r => r.skipped).length;
-  
+  const totalSkipped = results.filter((r) => r.skipped).length;
+
   // Log summary
   core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
   core.info(`Total packages processed: ${totalPackages}`);
@@ -74625,10 +74658,10 @@ function outputResults(results, packageType) {
   if (totalSkipped > 0) {
     core.info(`Skipped packages: ${totalSkipped}`);
   }
-  
+
   // Set output
   core.setOutput("result", JSON.stringify(results));
-  
+
   // Set job status based on results
   if (totalFailed > 0 && totalSuccess === 0) {
     core.setFailed(`All ${packageType} package migrations failed`);
@@ -74653,17 +74686,18 @@ function createTempDir(basePath = process.cwd()) {
  * Format package name based on org and type
  */
 function formatPackageName(packageName, org, packageType) {
-  switch(packageType.toLowerCase()) {
-    case 'npm':
+  switch (packageType.toLowerCase()) {
+    case "npm":
       return `@${org}/${packageName}`;
-    case 'nuget':
+    case "nuget":
       return packageName;
-    case 'container':
+    case "container":
       return `${org}/${packageName}`;
     default:
       return packageName;
   }
 }
+
 ;// CONCATENATED MODULE: ./src/index.js
 
 
@@ -74676,11 +74710,11 @@ function formatPackageName(packageName, org, packageType) {
 /**
  * Write .npmrc for target registry and return its path
  */
-function writeNpmrc(tempDir, targetOrg, targetHost, ghTargetPat) {
+function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
   const npmrcPath = external_path_.join(tempDir, ".npmrc");
   external_fs_.writeFileSync(
     npmrcPath,
-    `@${targetOrg}:registry=https://npm.pkg.${targetHost}/\n//npm.pkg.${targetHost}/:_authToken=${ghTargetPat}\n`
+    `@${targetOrg}:registry=${targetRegistryUrl}/\n//${new URL(targetRegistryUrl).host}/:_authToken=${ghTargetPat}\n`
   );
   return npmrcPath;
 }
@@ -74689,7 +74723,7 @@ function writeNpmrc(tempDir, targetOrg, targetHost, ghTargetPat) {
  * Migrate a single npm package version
  */
 async function migrateVersion(packageName, versionName, context) {
-  const { sourceOrg, sourceHost, ghSourcePat, tempDir, npmrcPath, targetOrg } = context;
+  const { sourceOrg, sourceApiUrl, sourceRegistryUrl, ghSourcePat, tempDir, npmrcPath, targetOrg } = context;
   const versionTempDir = external_path_.join(tempDir, `${packageName}-${versionName}`);
 
   // Clean up any previous directory
@@ -74702,7 +74736,7 @@ async function migrateVersion(packageName, versionName, context) {
     core.info(`Migrating ${packageName}@${versionName}`);
 
     // Step 1: Get the tarball URL from the package manifest
-    const manifestUrl = `https://${sourceHost}/npm.pkg.github.com/@${sourceOrg}/${packageName}`;
+    const manifestUrl = `${sourceRegistryUrl}/@${sourceOrg}/${packageName}`;
     const manifest = await lib_axios.get(manifestUrl, {
       headers: { Authorization: `token ${ghSourcePat}` },
     });
@@ -74789,7 +74823,16 @@ async function migratePackage(pkg, context) {
 async function run() {
   try {
     // Get common inputs using the shared utility
-    const { sourceOrg, sourceHost, targetOrg, targetHost, ghSourcePat, ghTargetPat } = getCommonInputs(core_namespaceObject);
+    const {
+      sourceOrg,
+      sourceApiUrl,
+      sourceRegistryUrl,
+      targetOrg,
+      targetApiUrl,
+      targetRegistryUrl,
+      ghSourcePat,
+      ghTargetPat,
+    } = getCommonInputs(core_namespaceObject);
 
     // Parse packages from input using the shared utility
     const packagesJson = core.getInput("packages", { required: true });
@@ -74805,19 +74848,25 @@ async function run() {
     const tempDir = external_path_.join(process.cwd(), "temp");
     external_fs_.mkdirSync(tempDir, { recursive: true });
 
+    // Get registry URLs
+    const sourceNpmRegistry = sourceRegistryUrl || getNpmRegistryUrl(sourceApiUrl);
+    const targetNpmRegistry = targetRegistryUrl || getNpmRegistryUrl(targetApiUrl);
+
     // Set up Octokit client using the shared utility
-    const octokitSource = createOctokitClient(ghSourcePat, sourceHost);
+    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
 
     // Set up npmrc file
-    const npmrcPath = writeNpmrc(tempDir, targetOrg, targetHost, ghTargetPat);
+    const npmrcPath = writeNpmrc(tempDir, targetOrg, targetNpmRegistry, ghTargetPat);
 
     // Prepare context with all configuration
     const context = {
       octokitSource,
       sourceOrg,
-      sourceHost,
+      sourceApiUrl,
+      sourceRegistryUrl: sourceNpmRegistry,
       targetOrg,
-      targetHost,
+      targetApiUrl,
+      targetRegistryUrl: targetNpmRegistry,
       ghSourcePat,
       ghTargetPat,
       tempDir,

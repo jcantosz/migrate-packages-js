@@ -4,17 +4,23 @@ inputs:
   source-org:
     description: "The source organization from which to migrate container packages"
     required: true
-  source-host:
-    description: "The source GitHub host (e.g., github.com)"
+  source-api-url:
+    description: "The source GitHub API URL (e.g., https://github.com)"
     required: true
-    default: "github.com"
+    default: "https://api.github.com"
+  source-registry-url:
+    description: "The source container registry URL (e.g., https://containers.HOSTNAME/). If not provided, will be derived from the API URL"
+    required: false
   target-org:
     description: "The target organization to which to migrate container packages"
     required: true
-  target-host:
-    description: "The target GitHub host (e.g., github.com)"
+  target-api-url:
+    description: "The target GitHub API URL (e.g., https://api.github.com)"
     required: true
-    default: "github.com"
+    default: "https://api.github.com"
+  target-registry-url:
+    description: "The target container registry URL (e.g., https://containers.HOSTNAME/). If not provided, will be derived from the API URL"
+    required: false
   gh-source-pat:
     description: "GitHub PAT for reading packages from source host"
     required: true

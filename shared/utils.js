@@ -12,19 +12,23 @@ import path from "path";
  */
 export function getCommonInputs(core) {
   const sourceOrg = core.getInput("source-org", { required: true });
-  const sourceHost = core.getInput("source-host", { required: true });
+  const sourceApiUrl = core.getInput("source-api-url", { required: true });
+  const sourceRegistryUrl = core.getInput("source-registry-url", { required: false });
   const targetOrg = core.getInput("target-org", { required: true });
-  const targetHost = core.getInput("target-host", { required: true });
-  const ghSourcePat = core.getInput("source-token", { required: true });
-  const ghTargetPat = core.getInput("target-token", { required: true });
-  
+  const targetApiUrl = core.getInput("target-api-url", { required: true });
+  const targetRegistryUrl = core.getInput("target-registry-url", { required: false });
+  const ghSourcePat = core.getInput("gh-source-pat", { required: true });
+  const ghTargetPat = core.getInput("gh-target-pat", { required: true });
+
   return {
     sourceOrg,
-    sourceHost,
+    sourceApiUrl,
+    sourceRegistryUrl,
     targetOrg,
-    targetHost,
+    targetApiUrl,
+    targetRegistryUrl,
     ghSourcePat,
-    ghTargetPat
+    ghTargetPat,
   };
 }
 
@@ -37,13 +41,12 @@ export function parsePackagesInput(packagesJson, packageType) {
     if (!Array.isArray(pkgObjects)) {
       throw new Error(`Packages input is not an array for ${packageType} migration`);
     }
-    
+
     // Filter for the specified package type if provided
     if (packageType) {
-      return pkgObjects.filter(pkg => 
-        pkg.type?.toLowerCase() === packageType.toLowerCase() || !pkg.type);
+      return pkgObjects.filter((pkg) => pkg.type?.toLowerCase() === packageType.toLowerCase() || !pkg.type);
     }
-    
+
     return pkgObjects;
   } catch (error) {
     throw new Error(`Failed to parse packages input: ${error.message}`);
@@ -53,13 +56,43 @@ export function parsePackagesInput(packagesJson, packageType) {
 /**
  * Create an Octokit client
  */
-export function createOctokitClient(token, host = 'github.com') {
+export function createOctokitClient(token, apiUrl) {
   return new Octokit({
     auth: token,
-    baseUrl: host === 'github.com' 
-      ? 'https://api.github.com'
-      : `https://${host}/api/v3`
+    baseUrl: apiUrl,
   });
+}
+
+/**
+ * Derive npm registry URL from API URL or use custom registry URL
+ */
+export function getNpmRegistryUrl(apiUrl, customRegistryUrl) {
+  if (customRegistryUrl) {
+    return customRegistryUrl;
+  }
+
+  // Extract the domain from API URL
+  const url = new URL(apiUrl);
+  const domain = url.hostname;
+
+  return domain === "api.github.com" ? "https://npm.pkg.github.com" : `https://npm.pkg.${domain.replace(/^api\./, "")}`;
+}
+
+/**
+ * Derive NuGet registry URL from API URL or use custom registry URL
+ */
+export function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
+  if (customRegistryUrl) {
+    return customRegistryUrl;
+  }
+
+  // Extract the domain from API URL
+  const url = new URL(apiUrl);
+  const domain = url.hostname;
+
+  return domain === "api.github.com"
+    ? "https://nuget.pkg.github.com"
+    : `https://nuget.pkg.${domain.replace(/^api\./, "")}`;
 }
 
 /**
@@ -68,31 +101,31 @@ export function createOctokitClient(token, host = 'github.com') {
 export async function fetchVersions(octokitClient, org, packageName, packageType) {
   try {
     // Different package types have different version fetching logic
-    switch(packageType.toLowerCase()) {
-      case 'npm':
+    switch (packageType.toLowerCase()) {
+      case "npm":
         const npmResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: 'npm',
+          package_type: "npm",
           package_name: packageName,
-          org: org
+          org: org,
         });
         return npmResult.data;
-        
-      case 'nuget':
+
+      case "nuget":
         const nugetResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: 'nuget',
+          package_type: "nuget",
           package_name: packageName,
-          org: org
+          org: org,
         });
         return nugetResult.data;
-        
-      case 'container':
+
+      case "container":
         const containerResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: 'container',
+          package_type: "container",
           package_name: packageName,
-          org: org
+          org: org,
         });
         return containerResult.data;
-        
+
       default:
         throw new Error(`Unsupported package type: ${packageType}`);
     }
@@ -115,14 +148,14 @@ export function cleanupTempDir(dirPath) {
  * Output results to GitHub Actions
  */
 export function outputResults(results, packageType) {
-  const core = require('@actions/core');
-  
+  const core = require("@actions/core");
+
   // Calculate totals
   const totalPackages = results.length;
   const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
   const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
-  const totalSkipped = results.filter(r => r.skipped).length;
-  
+  const totalSkipped = results.filter((r) => r.skipped).length;
+
   // Log summary
   core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
   core.info(`Total packages processed: ${totalPackages}`);
@@ -131,10 +164,10 @@ export function outputResults(results, packageType) {
   if (totalSkipped > 0) {
     core.info(`Skipped packages: ${totalSkipped}`);
   }
-  
+
   // Set output
   core.setOutput("result", JSON.stringify(results));
-  
+
   // Set job status based on results
   if (totalFailed > 0 && totalSuccess === 0) {
     core.setFailed(`All ${packageType} package migrations failed`);
@@ -159,12 +192,12 @@ export function createTempDir(basePath = process.cwd()) {
  * Format package name based on org and type
  */
 export function formatPackageName(packageName, org, packageType) {
-  switch(packageType.toLowerCase()) {
-    case 'npm':
+  switch (packageType.toLowerCase()) {
+    case "npm":
       return `@${org}/${packageName}`;
-    case 'nuget':
+    case "nuget":
       return packageName;
-    case 'container':
+    case "container":
       return `${org}/${packageName}`;
     default:
       return packageName;

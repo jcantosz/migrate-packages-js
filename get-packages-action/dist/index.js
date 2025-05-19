@@ -31984,7 +31984,7 @@ const PaginatedOctokit = dist_src_Octokit.plugin(dist_bundle_paginateRest);
  * @param {Object} octokit - Authenticated Octokit instance
  * @param {string} org - Organization name
  * @param {string} packageType - Type of package (npm, docker, nuget)
- * @returns {Array} - List of packages
+ * @returns {Array} - List of packages with minimal required data
  */
 async function fetchPackages(octokit, org, packageType) {
   try {
@@ -31993,7 +31993,13 @@ async function fetchPackages(octokit, org, packageType) {
       package_type: packageType,
       per_page: 100,
     });
-    return packages;
+
+    // Only retain the essential fields needed by migration actions
+    return packages.map((pkg) => ({
+      name: pkg.name,
+      type: packageType,
+      repository: pkg.repository ? { name: pkg.repository.name } : null,
+    }));
   } catch (err) {
     core.warning(`Error fetching ${packageType} packages: ${err.message}`);
     return [];
@@ -32023,18 +32029,16 @@ async function run() {
   try {
     // Get inputs
     const sourceOrg = core.getInput("source-org", { required: true });
-    const sourceHost = core.getInput("source-host", { required: true });
+    const sourceAPIUrl = core.getInput("source-api-url", { required: true });
     const ghSourcePat = core.getInput("gh-source-pat", { required: true });
     const repoName = core.getInput("repo-name");
+    const packageTypes = core.getInput("package-types")?.split(",");
 
     // Create authenticated client
     const octokit = new PaginatedOctokit({
       auth: ghSourcePat,
-      baseUrl: `https://${sourceHost}/api/v3`,
+      baseUrl: sourceAPIUrl,
     });
-
-    // Define supported package types
-    const packageTypes = ["npm", "docker", "nuget"];
 
     // Store results by type
     const packagesByType = {};
@@ -32042,7 +32046,9 @@ async function run() {
 
     // Fetch and filter packages for each type
     for (const type of packageTypes) {
+      core.debug(`Fetching ${type}`);
       const allPackages = await fetchPackages(octokit, sourceOrg, type);
+      core.debug(JSON.stringify(allPackages));
       const filteredPackages = filterPackagesByRepo(allPackages, repoName);
 
       // Store the filtered packages
