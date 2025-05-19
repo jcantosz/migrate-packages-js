@@ -82,27 +82,25 @@ async function migrateVersion(packageName, versionName, context) {
     const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
     pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
 
-    // Step 4a: Update repository URL for repo migration
-    let targetApiHostname = new URL(targetApiUrl).hostname;
-    // Remove 'api.' prefix if present (e.g., convert api.github.com to github.com)
-    targetApiHostname = targetApiHostname.startsWith("api.") ? targetApiHostname.substring(4) : targetApiHostname;
-
-    const repoUrl = `git+https://${targetApiHostname}/${targetOrg}/${repoName}.git`;
-
-    core.info(`Setting repo url in package.json to "${repoUrl}"`);
-    if (!pkgJson.repository) {
-      core.info("Repository key not found, org level, doing nothing");
-      // Add repository field if it doesn't exist
-    } else if (typeof pkgJson.repository === "string") {
-      // Update repository string
-      core.info("Repository key found, updating");
-      pkgJson.repository = repoUrl;
-    } else if (typeof pkgJson.repository === "object") {
-      // Update repository.url
-      core.info("Repository key is an object, Updating repository.url");
-      pkgJson.repository.url = repoUrl;
-      if (!pkgJson.repository.type) {
-        pkgJson.repository.type = "git";
+    // Update repository URL with either repo-name or extracted from existing URL
+    if (repoName || pkgJson.repository) {
+      let targetHostname = new URL(targetApiUrl).hostname;
+      targetHostname = targetHostname.startsWith("api.") ? targetHostname.substring(4) : targetHostname;
+      
+      // Get repo name from input or extract from existing URL
+      const existingUrl = typeof pkgJson.repository === "string" ? pkgJson.repository : pkgJson.repository?.url || "";
+      const extractedName = repoName || (existingUrl?.split('/')?.pop()?.replace(/\.git$/, '') || null);
+      
+      if (extractedName) {
+        const newRepoUrl = `git+https://${targetHostname}/${targetOrg}/${extractedName}.git`;
+        if (typeof pkgJson.repository === "string") {
+          pkgJson.repository = newRepoUrl;
+        } else {
+          pkgJson.repository = pkgJson.repository || {};
+          pkgJson.repository.type = pkgJson.repository.type || "git";
+          pkgJson.repository.url = newRepoUrl;
+        }
+        core.info(`Updated repository URL to use ${extractedName}`);
       }
     }
 
