@@ -74560,7 +74560,7 @@ function createOctokitClient(token, apiUrl) {
 /**
  * Derive npm registry URL from API URL or use custom registry URL
  */
-function utils_getNpmRegistryUrl(apiUrl, customRegistryUrl) {
+function getNpmRegistryUrl(apiUrl, customRegistryUrl) {
   if (customRegistryUrl) {
     return customRegistryUrl;
   }

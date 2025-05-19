@@ -11,6 +11,7 @@ import {
   fetchVersions,
   cleanupTempDir,
   outputResults,
+  getNpmRegistryUrl,
 } from "../../shared/utils.js";
 
 /**
