@@ -16,9 +16,8 @@ jobs:
         id: get-packages
         uses: ./get-packages-action
         with:
-          source-org: ${{ vars.source-org }}
-          source-host: ${{ vars.source-host }}
-          source-api-url: ${{ vars.source-api-url }}
+          source-org: ${{ vars.source_org }}
+          source-api-url: ${{ vars.source_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           repo-name: ${{ github.event.inputs.repo-name }}
 
@@ -34,10 +33,10 @@ jobs:
         uses: ./migrate-nuget-packages-action
         id: migrate-nuget
         with:
-          source-org: ${{ vars.source-org }}
-          source-api-url: ${{ vars.source-api-url }}
-          target-org: ${{ vars.target-org }}
-          target-api-url: ${{ vars.target-api-url }}
+          source-org: ${{ vars.source_org }}
+          source-api-url: ${{ vars.source_api_url }}
+          target-org: ${{ vars.target_org }}
+          target-api-url: ${{ vars.target_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
           packages: ${{ steps.get-packages.outputs.nuget-packages }}
@@ -64,10 +63,10 @@ jobs:
         uses: ./migrate-npm-packages-action
         id: migrate-npm
         with:
-          source-org: ${{ vars.source-org }}
-          source-api-url: ${{ vars.source-api-url }}
-          target-org: ${{ vars.target-org }}
-          target-api-url: ${{ vars.target-api-url }}
+          source-org: ${{ vars.source_org }}
+          source-api-url: ${{ vars.source_api_url }}
+          target-org: ${{ vars.target_org }}
+          target-api-url: ${{ vars.target_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
           packages: ${{ steps.get-packages.outputs.npm-packages }}
@@ -89,13 +88,14 @@ jobs:
         uses: ./migrate-container-packages-action
         id: migrate-container
         with:
-          source-org: ${{ vars.source-org }}
-          source-api-url: ${{ vars.source-api-url }}
-          target-org: ${{ vars.target-org }}
-          target-api-url: ${{ vars.target-api-url }}
+          source-org: ${{ vars.source_org }}
+          source-api-url: ${{ vars.source_api_url }}
+          target-org: ${{ vars.target_org }}
+          target-api-url: ${{ vars.target_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
           packages: ${{ steps.get-packages.outputs.container-packages }}
+
       - name: Write step summary
         if: always()
         id: write-output
