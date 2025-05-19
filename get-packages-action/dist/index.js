@@ -32032,7 +32032,8 @@ async function run() {
     const sourceAPIUrl = core.getInput("source-api-url", { required: true });
     const ghSourcePat = core.getInput("gh-source-pat", { required: true });
     const repoName = core.getInput("repo-name");
-    const packageTypes = core.getInput("package-types")?.split(",");
+    const packageTypesInput = core.getInput("package-types") || "npm, nuget, container";
+    const packageTypes = packageTypesInput.split(",").map((type) => type.trim());
 
     // Create authenticated client
     const octokit = new PaginatedOctokit({
@@ -32046,15 +32047,24 @@ async function run() {
 
     // Fetch and filter packages for each type
     for (const type of packageTypes) {
+      if (!type) continue; // Skip empty types
+
       core.debug(`Fetching ${type}`);
 
-      const allPackages = await fetchPackages(octokit, sourceOrg, type?.trim());
-      core.debug(JSON.stringify(allPackages));
+      const allPackages = await fetchPackages(octokit, sourceOrg, type);
+      core.debug(`Found ${allPackages.length} total ${type} packages`);
+
       const filteredPackages = filterPackagesByRepo(allPackages, repoName);
 
       // Store the filtered packages
       packagesByType[type] = filteredPackages;
       totalPackages += filteredPackages.length;
+
+      // Set outputs for specific package type
+      const packagesJson = JSON.stringify(filteredPackages);
+      core.debug(`${type} packages JSON: ${packagesJson}`);
+      core.setOutput(`${type}-packages`, packagesJson);
+      core.setOutput(`${type}-count`, filteredPackages.length);
 
       core.info(
         `Found ${filteredPackages.length} ${type} packages${repoName ? ` for repo ${repoName}` : " without repo"}`
@@ -32067,14 +32077,10 @@ async function run() {
       core.info(`Total packages found: ${totalPackages}`);
     }
 
-    // Set outputs for each package type
-    for (const [type, packages] of Object.entries(packagesByType)) {
-      core.setOutput(`${type}-packages`, JSON.stringify(packages));
-      core.setOutput(`${type}-count`, packages.length);
-    }
-
     // Set composite output with all package data
-    core.setOutput("all-packages", JSON.stringify(packagesByType));
+    const allPackagesJson = JSON.stringify(packagesByType);
+    core.debug(`All packages JSON: ${allPackagesJson}`);
+    core.setOutput("all-packages", allPackagesJson);
     core.setOutput("total-count", totalPackages);
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
