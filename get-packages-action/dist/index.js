@@ -32048,7 +32048,7 @@ async function run() {
     for (const type of packageTypes) {
       core.debug(`Fetching ${type}`);
 
-      const allPackages = await fetchPackages(octokit, sourceOrg, type?.strip());
+      const allPackages = await fetchPackages(octokit, sourceOrg, type?.trim());
       core.debug(JSON.stringify(allPackages));
       const filteredPackages = filterPackagesByRepo(allPackages, repoName);
 

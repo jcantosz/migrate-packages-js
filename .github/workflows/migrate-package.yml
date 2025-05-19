@@ -24,7 +24,7 @@ jobs:
   migrate-nuget:
     runs-on: ubuntu-latest
     needs: get-packages
-    if: needs.get-packages.outputs.nuget-count > 0
+    # if: needs.get-packages.outputs.nuget-count != 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
   migrate-npm:
     runs-on: ubuntu-latest
     needs: get-packages
-    if: needs.get-packages.outputs.npm-count > 0
+    # if: needs.get-packages.outputs.npm-count != 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
   migrate-container:
     runs-on: ubuntu-latest
     needs: get-packages
-    if: needs.get-packages.outputs.docker-count > 0
+    # if: needs.get-packages.outputs.container-count != 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
