@@ -8,6 +8,20 @@ on:
 jobs:
   get-packages:
     runs-on: ubuntu-latest
+    outputs:
+      npm-packages: ${{ steps.get-packages.outputs.npm-packages }}
+      npm-count: ${{ steps.get-packages.outputs.npm-count }}
+      container-packages: ${{ steps.get-packages.outputs.container-packages }}
+      container-count: ${{ steps.get-packages.outputs.container-count }}
+      nuget-packages: ${{ steps.get-packages.outputs.nuget-packages }}
+      nuget-count: ${{ steps.get-packages.outputs.nuget-count }}
+      rubygems-packages: ${{ steps.get-packages.outputs.rubygems-packages }}
+      rubygems-count: ${{ steps.get-packages.outputs.rubygems-count }}
+      maven-packages: ${{ steps.get-packages.outputs.maven-packages }}
+      maven-count: ${{ steps.get-packages.outputs.maven-count }}
+      all-packages: ${{ steps.get-packages.outputs.all-packages }}
+      total-count: ${{ steps.get-packages.outputs.total-count }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,7 +53,7 @@ jobs:
           target-api-url: ${{ vars.target_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ steps.get-packages.outputs.nuget-packages }}
+          packages: ${{ needs.get-packages.outputs.nuget-packages }}
 
       - name: Write step summary
         if: always()
@@ -69,7 +83,7 @@ jobs:
           target-api-url: ${{ vars.target_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ steps.get-packages.outputs.npm-packages }}
+          packages: ${{ needs.get-packages.outputs.npm-packages }}
       - name: Write step summary
         if: always()
         id: write-output
@@ -94,7 +108,7 @@ jobs:
           target-api-url: ${{ vars.target_api_url }}
           gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
           gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ steps.get-packages.outputs.container-packages }}
+          packages: ${{ needs.get-packages.outputs.container-packages }}
 
       - name: Write step summary
         if: always()
