@@ -182,22 +182,34 @@ function fixNuGetPackage(packagePath) {
  */
 function pushPackage(packagePath, gprPath, targetOrg, repoName, token) {
   try {
-    core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
+    if (repoName) {
+      core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
+    } else {
+      core.info(`Pushing ${packagePath} to ${targetOrg} (no repository specified)`);
+    }
 
-    const result = spawnSync(
-      gprPath,
-      ["push", packagePath, "--repository", `https://github.com/${targetOrg}/${repoName}`, "-k", token],
-      {
-        stdio: "pipe",
-        encoding: "utf-8",
-      }
-    );
+    // Prepare GPR arguments based on whether we have a repository name
+    const gprArgs = ["push", packagePath, "-k", token];
+    
+    // Only add repository parameter if repoName is provided
+    if (repoName) {
+      gprArgs.push("--repository", `https://github.com/${targetOrg}/${repoName}`);
+    }
+
+    const result = spawnSync(gprPath, gprArgs, {
+      stdio: "pipe",
+      encoding: "utf-8",
+    });
 
     if (result.status !== 0) {
       throw new Error(`GPR push failed: ${result.stderr || result.stdout}`);
     }
 
-    core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
+    if (repoName) {
+      core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
+    } else {
+      core.info(`Successfully pushed ${packagePath} to ${targetOrg}`);
+    }
     return true;
   } catch (err) {
     core.warning(`Failed to push package: ${err.message}`);
@@ -255,9 +267,9 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
   let failureCount = 0;
 
   const packageName = pkg.name;
-  const repoName = pkg.repository?.name || packageName; // If no repo, use package name
+  const repoName = pkg.repository?.name || null; // Don't default to package name
 
-  core.info(`Migrating NuGet package: ${packageName} from repo: ${repoName}`);
+  core.info(`Migrating NuGet package: ${packageName}${repoName ? ` from repo: ${repoName}` : ''}`);
 
   // Get all versions for this NuGet package
   const versions = await fetchVersions(octokitSource, sourceOrg, packageName);
