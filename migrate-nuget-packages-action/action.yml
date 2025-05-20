@@ -35,4 +35,4 @@ outputs:
     description: "The results of the migration process as a JSON array with success/failure counts for each package"
 runs:
   using: "node20"
-  main: "index.cjs"
+  main: "dist/index.js"
