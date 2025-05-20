@@ -178,9 +178,10 @@ function fixNuGetPackage(packagePath) {
  * @param {string} targetOrg - Target organization
  * @param {string} repoName - Repository name
  * @param {string} token - GitHub PAT for target
+ * @param {string} targetApiUrl - Target API URL
  * @returns {boolean} - True if successful
  */
-function pushPackage(packagePath, gprPath, targetOrg, repoName, token) {
+function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApiUrl) {
   try {
     if (repoName) {
       core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
@@ -193,7 +194,11 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token) {
 
     // Only add repository parameter if repoName is provided
     if (repoName) {
-      gprArgs.push("--repository", `https://github.com/${targetOrg}/${repoName}`);
+      // Extract hostname from targetApiUrl, removing any "api." prefix
+      let targetHostname = new URL(targetApiUrl).hostname;
+      targetHostname = targetHostname.startsWith("api.") ? targetHostname.substring(4) : targetHostname;
+      
+      gprArgs.push("--repository", `https://${targetHostname}/${targetOrg}/${repoName}`);
     }
 
     const result = spawnSync(gprPath, gprArgs, {
@@ -241,7 +246,7 @@ async function migrateVersion(packageName, version, repoName, context, tempDir, 
     }
 
     // Push the package to the target
-    const pushResult = pushPackage(packagePath, gprPath, targetOrg, repoName, ghTargetPat);
+    const pushResult = pushPackage(packagePath, gprPath, targetOrg, repoName, ghTargetPat, targetApiUrl);
     if (!pushResult) {
       throw new Error(`Failed to push package ${packageName} version ${version}`);
     }
