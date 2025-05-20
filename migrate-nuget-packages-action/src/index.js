@@ -6,7 +6,7 @@ import { execSync, spawnSync } from "child_process";
 import os from "os";
 import axios from "axios";
 import AdmZip from "adm-zip";
-import { getCommonInputs, createOctokitClient, getNuGetRegistryUrl } from "../../shared/utils.js";
+import { getCommonInputs, createOctokitClient, getNuGetRegistryUrl, getBaseHostname, outputResults } from "../../shared/utils.js";
 
 /**
  * Sets up the environment for NuGet package migration
@@ -194,10 +194,9 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApi
 
     // Only add repository parameter if repoName is provided
     if (repoName) {
-      // Extract hostname from targetApiUrl, removing any "api." prefix
-      let targetHostname = new URL(targetApiUrl).hostname;
-      targetHostname = targetHostname.startsWith("api.") ? targetHostname.substring(4) : targetHostname;
-      
+      // Use the shared utility function to extract the base hostname
+      const targetHostname = getBaseHostname(targetApiUrl);
+
       gprArgs.push("--repository", `https://${targetHostname}/${targetOrg}/${repoName}`);
     }
 
@@ -415,11 +414,8 @@ async function run() {
       results.push(result);
     }
 
-    // Output results
-    const summary = formatResults(results);
-    core.info(summary);
-    core.setOutput("result", JSON.stringify(results));
-    core.info("NuGet packages migration complete.");
+    // Output results using the shared utility function
+    outputResults(results, "nuget");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
   } finally {

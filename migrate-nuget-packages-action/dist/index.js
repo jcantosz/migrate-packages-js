@@ -61526,8 +61526,8 @@ __nccwpck_require__.d(common_utils_namespaceObject, {
 });
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var lib_core = __nccwpck_require__(4097);
-var core_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(lib_core, 2);
+var core = __nccwpck_require__(4097);
+var core_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(core, 2);
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __nccwpck_require__(7147);
 // EXTERNAL MODULE: external "path"
@@ -66653,7 +66653,7 @@ axios.default = axios;
 // EXTERNAL MODULE: ./node_modules/adm-zip/adm-zip.js
 var adm_zip = __nccwpck_require__(3589);
 // EXTERNAL MODULE: ../node_modules/@actions/core/lib/core.js
-var core_lib_core = __nccwpck_require__(2341);
+var lib_core = __nccwpck_require__(2341);
 ;// CONCATENATED MODULE: ../node_modules/universal-user-agent/index.js
 function getUserAgent() {
   if (typeof navigator === "object" && "userAgent" in navigator) {
@@ -70757,6 +70757,23 @@ function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
 }
 
 /**
+ * Extract the base hostname from an API URL
+ * @param {string} apiUrl - The API URL to extract the hostname from
+ * @returns {string} - The base hostname without any "api." prefix
+ */
+function getBaseHostname(apiUrl) {
+  const url = new URL(apiUrl);
+  const hostname = url.hostname;
+
+  // Remove "api." prefix if present
+  if (hostname.startsWith("api.")) {
+    return hostname.substring(4);
+  }
+
+  return hostname;
+}
+
+/**
  * Fetch all versions for a package
  */
 async function fetchVersions(octokitClient, org, packageName, packageType) {
@@ -70819,24 +70836,24 @@ function outputResults(results, packageType) {
   const summary = generateActionSummary(results, packageType);
 
   // Log summary to console
-  core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
-  core.info(`Total packages processed: ${totalPackages}`);
-  core.info(`Successful version migrations: ${totalSuccess}`);
-  core.info(`Failed version migrations: ${totalFailed}`);
+  lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
+  lib_core.info(`Total packages processed: ${totalPackages}`);
+  lib_core.info(`Successful version migrations: ${totalSuccess}`);
+  lib_core.info(`Failed version migrations: ${totalFailed}`);
   if (totalSkipped > 0) {
-    core.info(`Skipped packages: ${totalSkipped}`);
+    lib_core.info(`Skipped packages: ${totalSkipped}`);
   }
-  core.info(summary);
+  lib_core.info(summary);
 
   // Set output
-  core.setOutput("result", JSON.stringify(results));
-  core.setOutput("result-summary", summary);
+  lib_core.setOutput("result", JSON.stringify(results));
+  lib_core.setOutput("result-summary", summary);
 
   // Set job status based on results
   if (totalFailed > 0 && totalSuccess === 0) {
-    core.setFailed(`All ${packageType} package migrations failed`);
+    lib_core.setFailed(`All ${packageType} package migrations failed`);
   } else if (totalFailed > 0) {
-    core.warning(`Some ${packageType} package migrations failed`);
+    lib_core.warning(`Some ${packageType} package migrations failed`);
   }
 }
 
@@ -70854,15 +70871,13 @@ function generateActionSummary(results, packageType) {
   const totalSkipped = results.filter((r) => r.skipped).length;
 
   // Start building the GitHub summary
-  core.summary
-    .addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
+  lib_core.summary.addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
     .addRaw("Migration completed.")
     .addBreak()
     .addBreak();
 
   // Add statistics table
-  core.summary
-    .addTable([
+  lib_core.summary.addTable([
       [
         { data: "Statistics", header: true },
         { data: "Count", header: true },
@@ -70875,7 +70890,7 @@ function generateActionSummary(results, packageType) {
     .addBreak();
 
   // Add results list with core.summary.addList
-  core.summary.addHeading("Per-Package Results:", 3);
+  lib_core.summary.addHeading("Per-Package Results:", 3);
 
   // Create an array of formatted results for the list WITH Markdown formatting
   const markdownResultItems = results.map((r) => {
@@ -70887,10 +70902,10 @@ function generateActionSummary(results, packageType) {
   });
 
   // Add the list to the summary
-  core.summary.addList(markdownResultItems);
+  lib_core.summary.addList(markdownResultItems);
 
   // Write the summary to the output
-  core.summary.write();
+  lib_core.summary.write();
 
   // Create plain text results WITHOUT Markdown formatting
   const plainTextResultItems = results.map((r) => {
@@ -70954,7 +70969,7 @@ function formatPackageName(packageName, org, packageType) {
 function setupEnvironment() {
   // Create a temp directory
   const tempDir = external_path_.join(external_os_.tmpdir(), "nuget-migrate-" + Math.random().toString(36).substring(2, 10));
-  lib_core.info(`Creating temp directory: ${tempDir}`);
+  core.info(`Creating temp directory: ${tempDir}`);
 
   external_fs_.mkdirSync(tempDir, { recursive: true });
   return tempDir;
@@ -70967,7 +70982,7 @@ function setupEnvironment() {
 function checkDotNetInstallation() {
   try {
     (0,external_child_process_.execSync)("dotnet --version", { stdio: "pipe" });
-    lib_core.info("dotnet is installed");
+    core.info("dotnet is installed");
   } catch (err) {
     throw new Error("dotnet is not installed or not accessible. dotnet is required for NuGet package migration.");
   }
@@ -70983,7 +70998,7 @@ function installGpr(tempDir) {
     const toolsDir = external_path_.join(tempDir, "tools");
     external_fs_.mkdirSync(toolsDir, { recursive: true });
 
-    lib_core.info("Installing gpr tool...");
+    core.info("Installing gpr tool...");
     (0,external_child_process_.spawnSync)("dotnet", ["tool", "install", "gpr", "--tool-path", toolsDir], {
       stdio: "inherit",
       encoding: "utf-8",
@@ -70998,7 +71013,7 @@ function installGpr(tempDir) {
       throw new Error(`Failed to install gpr tool. Could not find ${gprPath}`);
     }
 
-    lib_core.info(`Successfully installed gpr at ${gprPath}`);
+    core.info(`Successfully installed gpr at ${gprPath}`);
     return gprPath;
   } catch (err) {
     throw new Error(`Error installing gpr: ${err.message}`);
@@ -71022,10 +71037,10 @@ async function src_fetchVersions(octokit, org, packageName) {
 
     // Extract just the version names
     const versionNames = versions.map((version) => version.name);
-    lib_core.info(`Found ${versionNames.length} versions for package ${packageName}`);
+    core.info(`Found ${versionNames.length} versions for package ${packageName}`);
     return versionNames;
   } catch (err) {
-    lib_core.warning(`Error fetching versions for NuGet package ${packageName}: ${err.message}`);
+    core.warning(`Error fetching versions for NuGet package ${packageName}: ${err.message}`);
     return [];
   }
 }
@@ -71045,7 +71060,7 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
     const outputPath = external_path_.join(outputDir, `${packageName}_${version}.nupkg`);
     const url = `${sourceRegistryUrl}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
 
-    lib_core.info(`Downloading ${packageName} version ${version} from ${url}`);
+    core.info(`Downloading ${packageName} version ${version} from ${url}`);
 
     const response = await lib_axios({
       method: "get",
@@ -71058,7 +71073,7 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
     });
 
     external_fs_.writeFileSync(outputPath, response.data);
-    lib_core.info(`Successfully downloaded ${packageName} version ${version} to ${outputPath}`);
+    core.info(`Successfully downloaded ${packageName} version ${version} to ${outputPath}`);
 
     return outputPath;
   } catch (err) {
@@ -71073,7 +71088,7 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
  */
 function fixNuGetPackage(packagePath) {
   try {
-    lib_core.info(`Fixing NuGet package: ${packagePath}`);
+    core.info(`Fixing NuGet package: ${packagePath}`);
 
     // Use adm-zip to remove the problematic files
     const zip = new adm_zip(packagePath);
@@ -71102,10 +71117,10 @@ function fixNuGetPackage(packagePath) {
     // Write the fixed zip back to disk
     zip.writeZip(packagePath);
 
-    lib_core.info(`Successfully fixed NuGet package: ${packagePath}`);
+    core.info(`Successfully fixed NuGet package: ${packagePath}`);
     return true;
   } catch (err) {
-    lib_core.warning(`Failed to fix NuGet package: ${err.message}`);
+    core.warning(`Failed to fix NuGet package: ${err.message}`);
     return false;
   }
 }
@@ -71123,9 +71138,9 @@ function fixNuGetPackage(packagePath) {
 function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApiUrl) {
   try {
     if (repoName) {
-      lib_core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
+      core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
     } else {
-      lib_core.info(`Pushing ${packagePath} to ${targetOrg} (no repository specified)`);
+      core.info(`Pushing ${packagePath} to ${targetOrg} (no repository specified)`);
     }
 
     // Prepare GPR arguments based on whether we have a repository name
@@ -71133,10 +71148,9 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApi
 
     // Only add repository parameter if repoName is provided
     if (repoName) {
-      // Extract hostname from targetApiUrl, removing any "api." prefix
-      let targetHostname = new URL(targetApiUrl).hostname;
-      targetHostname = targetHostname.startsWith("api.") ? targetHostname.substring(4) : targetHostname;
-      
+      // Use the shared utility function to extract the base hostname
+      const targetHostname = getBaseHostname(targetApiUrl);
+
       gprArgs.push("--repository", `https://${targetHostname}/${targetOrg}/${repoName}`);
     }
 
@@ -71150,13 +71164,13 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApi
     }
 
     if (repoName) {
-      lib_core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
+      core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
     } else {
-      lib_core.info(`Successfully pushed ${packagePath} to ${targetOrg}`);
+      core.info(`Successfully pushed ${packagePath} to ${targetOrg}`);
     }
     return true;
   } catch (err) {
-    lib_core.warning(`Failed to push package: ${err.message}`);
+    core.warning(`Failed to push package: ${err.message}`);
     return false;
   }
 }
@@ -71192,7 +71206,7 @@ async function migrateVersion(packageName, version, repoName, context, tempDir, 
 
     return true;
   } catch (err) {
-    lib_core.warning(`Failed to migrate ${packageName} version ${version}: ${err.message}`);
+    core.warning(`Failed to migrate ${packageName} version ${version}: ${err.message}`);
     return false;
   }
 }
@@ -71213,13 +71227,13 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
   const packageName = pkg.name;
   const repoName = pkg.repository?.name || null; // Don't default to package name
 
-  lib_core.info(`Migrating NuGet package: ${packageName}${repoName ? ` from repo: ${repoName}` : ""}`);
+  core.info(`Migrating NuGet package: ${packageName}${repoName ? ` from repo: ${repoName}` : ""}`);
 
   // Get all versions for this NuGet package
   const versions = await src_fetchVersions(octokitSource, sourceOrg, packageName);
 
   if (versions.length === 0) {
-    lib_core.warning(`No versions found for package ${packageName}`);
+    core.warning(`No versions found for package ${packageName}`);
     return {
       package: packageName,
       versionsSucceeded: 0,
@@ -71273,7 +71287,7 @@ function formatResults(results) {
 function src_parsePackagesInput(packagesJson) {
   try {
     const packages = JSON.parse(packagesJson);
-    lib_core.info(`Found ${packages.length} NuGet packages to migrate`);
+    core.info(`Found ${packages.length} NuGet packages to migrate`);
     return packages;
   } catch (err) {
     throw new Error(`Invalid packages input: ${err.message}`);
@@ -71286,10 +71300,10 @@ function src_parsePackagesInput(packagesJson) {
  */
 function cleanUp(tempDir) {
   try {
-    lib_core.info(`Cleaning up temporary directory: ${tempDir}`);
+    core.info(`Cleaning up temporary directory: ${tempDir}`);
     external_fs_.rmSync(tempDir, { recursive: true, force: true });
   } catch (err) {
-    lib_core.warning(`Failed to clean up temporary directory: ${err.message}`);
+    core.warning(`Failed to clean up temporary directory: ${err.message}`);
   }
 }
 
@@ -71313,12 +71327,12 @@ async function run() {
     } = getCommonInputs(core_namespaceObject);
 
     // Parse packages input
-    const packagesJson = lib_core.getInput("packages", { required: true });
+    const packagesJson = core.getInput("packages", { required: true });
     const packages = src_parsePackagesInput(packagesJson);
 
     if (packages.length === 0) {
-      lib_core.info("No NuGet packages to migrate");
-      lib_core.setOutput("result", JSON.stringify([]));
+      core.info("No NuGet packages to migrate");
+      core.setOutput("result", JSON.stringify([]));
       return;
     }
 
@@ -71354,13 +71368,10 @@ async function run() {
       results.push(result);
     }
 
-    // Output results
-    const summary = formatResults(results);
-    lib_core.info(summary);
-    lib_core.setOutput("result", JSON.stringify(results));
-    lib_core.info("NuGet packages migration complete.");
+    // Output results using the shared utility function
+    outputResults(results, "nuget");
   } catch (error) {
-    lib_core.setFailed(`Action failed: ${error.message}`);
+    core.setFailed(`Action failed: ${error.message}`);
   } finally {
     // Clean up temp directory
     if (tempDir) {

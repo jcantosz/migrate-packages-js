@@ -120,6 +120,23 @@ export function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
 }
 
 /**
+ * Extract the base hostname from an API URL
+ * @param {string} apiUrl - The API URL to extract the hostname from
+ * @returns {string} - The base hostname without any "api." prefix
+ */
+export function getBaseHostname(apiUrl) {
+  const url = new URL(apiUrl);
+  const hostname = url.hostname;
+
+  // Remove "api." prefix if present
+  if (hostname.startsWith("api.")) {
+    return hostname.substring(4);
+  }
+
+  return hostname;
+}
+
+/**
  * Fetch all versions for a package
  */
 export async function fetchVersions(octokitClient, org, packageName, packageType) {

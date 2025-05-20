@@ -3,6 +3,7 @@ import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import { getBaseHostname } from "../../shared/utils.js";
 
 /**
  * Get registry URL based on API URL or use custom registry URL if provided
@@ -15,23 +16,16 @@ function getRegistryUrl(apiUrl, customRegistryUrl) {
     return customRegistryUrl;
   }
 
-  const url = new URL(apiUrl);
-  const hostname = url.hostname;
+  const hostname = new URL(apiUrl).hostname;
 
   // Handle github.com case
   if (hostname === "api.github.com") {
     return "ghcr.io";
   }
 
-  // Handle GitHub Data Residency case with subdomain pattern: api.SUBDOMAIN.ghe.com
-  if (hostname.startsWith("api.")) {
-    // Remove the "api." prefix to get the base domain
-    const baseDomain = hostname.substring(4);
-    return `containers.${baseDomain}`;
-  }
-
-  // Fallback for other patterns
-  return `containers.${hostname}`;
+  // Use the shared utility function to get the base hostname
+  const baseDomain = getBaseHostname(apiUrl);
+  return `containers.${baseDomain}`;
 }
 
 /**

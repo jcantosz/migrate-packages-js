@@ -12,6 +12,7 @@ import {
   cleanupTempDir,
   outputResults,
   getNpmRegistryUrl,
+  getBaseHostname,
 } from "../../shared/utils.js";
 
 /**
@@ -84,13 +85,19 @@ async function migrateVersion(packageName, versionName, context) {
 
     // Update repository URL with either repo-name or extracted from existing URL
     if (repoName || pkgJson.repository) {
-      let targetHostname = new URL(targetApiUrl).hostname;
-      targetHostname = targetHostname.startsWith("api.") ? targetHostname.substring(4) : targetHostname;
-      
+      // Use the shared utility function to get the base hostname
+      const targetHostname = getBaseHostname(targetApiUrl);
+
       // Get repo name from input or extract from existing URL
       const existingUrl = typeof pkgJson.repository === "string" ? pkgJson.repository : pkgJson.repository?.url || "";
-      const extractedName = repoName || (existingUrl?.split('/')?.pop()?.replace(/\.git$/, '') || null);
-      
+      const extractedName =
+        repoName ||
+        existingUrl
+          ?.split("/")
+          ?.pop()
+          ?.replace(/\.git$/, "") ||
+        null;
+
       if (extractedName) {
         const newRepoUrl = `git+https://${targetHostname}/${targetOrg}/${extractedName}.git`;
         if (typeof pkgJson.repository === "string") {
