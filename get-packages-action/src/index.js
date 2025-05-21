@@ -43,8 +43,11 @@ function filterPackagesByRepo(packages, repoName) {
     // Return packages that don't have a repository or have null repository
     return packages.filter((pkg) => !pkg.repository || !pkg.repository.name);
   } else {
-    // Return packages that match the specified repository name
-    return packages.filter((pkg) => pkg.repository && pkg.repository.name === repoName);
+    // Return packages that match the specified repository name (case-insensitive)
+    const repoNameLower = repoName.toLowerCase();
+    return packages.filter(
+      (pkg) => pkg.repository && pkg.repository.name && pkg.repository.name.toLowerCase() === repoNameLower
+    );
   }
 }
 
