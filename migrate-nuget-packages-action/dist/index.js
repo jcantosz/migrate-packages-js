@@ -70895,9 +70895,9 @@ function generateActionSummary(results, packageType) {
   // Create an array of formatted results for the list WITH Markdown formatting
   const markdownResultItems = results.map((r) => {
     if (r.skipped) {
-      return `**${r.package}**: SKIPPED (${r.reason || "No reason provided"})`;
+      return `<strong>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
     } else {
-      return `**${r.package}**: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
+      return `<strong>${r.package}</strong>: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
     }
   });
 
