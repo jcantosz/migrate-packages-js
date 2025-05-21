@@ -13,6 +13,7 @@ import {
   outputResults,
   getNpmRegistryUrl,
   getBaseHostname,
+  withRetry,
 } from "../../shared/utils.js";
 
 /**
@@ -31,17 +32,7 @@ function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
  * Migrate a single npm package version
  */
 async function migrateVersion(packageName, versionName, context) {
-  const {
-    sourceOrg,
-    sourceApiUrl,
-    sourceRegistryUrl,
-    ghSourcePat,
-    tempDir,
-    npmrcPath,
-    targetOrg,
-    targetApiUrl,
-    repoName,
-  } = context;
+  const { tempDir } = context;
   const versionTempDir = path.join(tempDir, `${packageName}-${versionName}`);
 
   // Clean up any previous directory
@@ -50,84 +41,107 @@ async function migrateVersion(packageName, versionName, context) {
   }
   fs.mkdirSync(versionTempDir, { recursive: true });
 
+  // Use withRetry function from shared utils with p-retry
   try {
-    core.info(`Migrating ${packageName}@${versionName}`);
+    return await withRetry(() => performNpmVersionMigration(packageName, versionName, context, versionTempDir), {
+      onRetry: (error, attempt) => {
+        core.info(`Retry attempt ${attempt} for ${packageName}@${versionName} after error: ${error.message}`);
 
-    // Step 1: Get the tarball URL from the package manifest
-    const manifestUrl = `${sourceRegistryUrl}/@${sourceOrg}/${packageName}`;
-    const manifest = await axios.get(manifestUrl, {
-      headers: { Authorization: `token ${ghSourcePat}` },
+        // Clean up the version temp dir to start fresh on retry
+        cleanupTempDir(versionTempDir);
+        fs.mkdirSync(versionTempDir, { recursive: true });
+      },
     });
-
-    const tarballUrl = manifest.data.versions[versionName]?.dist.tarball;
-    if (!tarballUrl) {
-      core.warning(`Version ${versionName} not found for package ${packageName}`);
-      cleanupTempDir(versionTempDir);
-      return false;
-    }
-
-    // Step 2: Download the package tarball
-    const tarballPath = path.join(versionTempDir, `${packageName}-${versionName}.tgz`);
-    const tarballResp = await axios.get(tarballUrl, {
-      responseType: "arraybuffer",
-      headers: { Authorization: `token ${ghSourcePat}` },
-    });
-    fs.writeFileSync(tarballPath, tarballResp.data);
-
-    // Step 3: Extract the tarball
-    await tar.x({ file: tarballPath, cwd: versionTempDir });
-    const packageDir = path.join(versionTempDir, "package");
-
-    // Step 4: Update the package.json to use the target organization
-    const pkgJsonPath = path.join(packageDir, "package.json");
-    const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
-    pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
-
-    // Update repository URL with either repo-name or extracted from existing URL
-    if (repoName || pkgJson.repository) {
-      // Use the shared utility function to get the base hostname
-      const targetHostname = getBaseHostname(targetApiUrl);
-
-      // Get repo name from input or extract from existing URL
-      const existingUrl = typeof pkgJson.repository === "string" ? pkgJson.repository : pkgJson.repository?.url || "";
-      const extractedName =
-        repoName ||
-        existingUrl
-          ?.split("/")
-          ?.pop()
-          ?.replace(/\.git$/, "") ||
-        null;
-
-      if (extractedName) {
-        const newRepoUrl = `git+https://${targetHostname}/${targetOrg}/${extractedName}.git`;
-        if (typeof pkgJson.repository === "string") {
-          pkgJson.repository = newRepoUrl;
-        } else {
-          pkgJson.repository = pkgJson.repository || {};
-          pkgJson.repository.type = pkgJson.repository.type || "git";
-          pkgJson.repository.url = newRepoUrl;
-        }
-        core.info(`Updated repository URL to use ${extractedName}`);
-      }
-    }
-
-    fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
-
-    // Step 5: Publish the package to the target registry
-    execSync(`npm publish --userconfig ${npmrcPath}`, {
-      cwd: packageDir,
-      stdio: "inherit",
-    });
-    core.info(`Published ${packageName}@${versionName} successfully`);
-
-    // Clean up after successful migration
-    cleanupTempDir(versionTempDir);
-    return true;
   } catch (err) {
-    core.warning(`Failed to migrate ${packageName}@${versionName}: ${err.message}`);
+    core.warning(`Failed to migrate ${packageName}@${versionName} after multiple attempts: ${err.message}`);
     cleanupTempDir(versionTempDir);
     return false;
   }
+}
+
+/**
+ * Performs the actual NPM package version migration
+ * @param {string} packageName - Name of the package
+ * @param {string} versionName - Version to migrate
+ * @param {object} context - Migration context
+ * @param {string} versionTempDir - Temporary directory for this version
+ * @returns {boolean} - Success status
+ */
+async function performNpmVersionMigration(packageName, versionName, context, versionTempDir) {
+  const { sourceOrg, sourceRegistryUrl, ghSourcePat, npmrcPath, targetOrg, targetApiUrl, repoName } = context;
+
+  core.info(`Migrating ${packageName}@${versionName}`);
+
+  // Step 1: Get the tarball URL from the package manifest
+  const manifestUrl = `${sourceRegistryUrl}/@${sourceOrg}/${packageName}`;
+  const manifest = await axios.get(manifestUrl, {
+    headers: { Authorization: `token ${ghSourcePat}` },
+  });
+
+  const tarballUrl = manifest.data.versions[versionName]?.dist.tarball;
+  if (!tarballUrl) {
+    core.warning(`Version ${versionName} not found for package ${packageName}`);
+    cleanupTempDir(versionTempDir);
+    return false;
+  }
+
+  // Step 2: Download the package tarball
+  const tarballPath = path.join(versionTempDir, `${packageName}-${versionName}.tgz`);
+  const tarballResp = await axios.get(tarballUrl, {
+    responseType: "arraybuffer",
+    headers: { Authorization: `token ${ghSourcePat}` },
+  });
+  fs.writeFileSync(tarballPath, tarballResp.data);
+
+  // Step 3: Extract the tarball
+  await tar.x({ file: tarballPath, cwd: versionTempDir });
+  const packageDir = path.join(versionTempDir, "package");
+
+  // Step 4: Update the package.json to use the target organization
+  const pkgJsonPath = path.join(packageDir, "package.json");
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+  pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
+
+  // Update repository URL with either repo-name or extracted from existing URL
+  if (repoName || pkgJson.repository) {
+    // Use the shared utility function to get the base hostname
+    const targetHostname = getBaseHostname(targetApiUrl);
+
+    // Get repo name from input or extract from existing URL
+    const existingUrl = typeof pkgJson.repository === "string" ? pkgJson.repository : pkgJson.repository?.url || "";
+    const extractedName =
+      repoName ||
+      existingUrl
+        ?.split("/")
+        ?.pop()
+        ?.replace(/\.git$/, "") ||
+      null;
+
+    if (extractedName) {
+      const newRepoUrl = `git+https://${targetHostname}/${targetOrg}/${extractedName}.git`;
+      if (typeof pkgJson.repository === "string") {
+        pkgJson.repository = newRepoUrl;
+      } else {
+        pkgJson.repository = pkgJson.repository || {};
+        pkgJson.repository.type = pkgJson.repository.type || "git";
+        pkgJson.repository.url = newRepoUrl;
+      }
+      core.info(`Updated repository URL to use ${extractedName}`);
+    }
+  }
+
+  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+
+  // Step 5: Publish the package to the target registry
+  execSync(`npm publish --userconfig ${npmrcPath}`, {
+    cwd: packageDir,
+    stdio: "inherit",
+  });
+  core.info(`Published ${packageName}@${versionName} successfully`);
+
+  // Clean up after successful migration
+  cleanupTempDir(versionTempDir);
+  return true;
 }
 
 /**

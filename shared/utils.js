@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
+import pRetry from "p-retry";
 
 /**
  * Shared utilities for package migration actions
@@ -30,6 +31,36 @@ export function getCommonInputs(core) {
     ghSourcePat,
     ghTargetPat,
   };
+}
+
+/**
+ * Retry an operation with exponential backoff using p-retry
+ * @param {Function} operation - Async function to retry
+ * @param {Object} options - Retry options
+ * @param {number} options.retries - Maximum number of retries (default: 3)
+ * @param {number} options.minTimeout - Minimum timeout between retries in ms (default: 1000)
+ * @param {number} options.maxTimeout - Maximum timeout between retries in ms (default: 10000)
+ * @param {Function} options.onRetry - Function called on retry with error and attempt count
+ * @returns {Promise<any>} - Result of the operation
+ */
+export async function withRetry(operation, options = {}) {
+  const {
+    retries = 3,
+    minTimeout = 1000,
+    maxTimeout = 10000,
+    onRetry = (error, attempt) => core.info(`Retry attempt ${attempt} after error: ${error.message}`),
+  } = options;
+
+  return pRetry(operation, {
+    retries,
+    minTimeout,
+    maxTimeout,
+    onFailedAttempt: (error) => {
+      const attempt = error.attemptNumber;
+      onRetry(error, attempt);
+      core.info(`Attempt ${attempt} failed. ${error.retriesLeft} retries left.`);
+    },
+  });
 }
 
 /**
@@ -271,7 +302,7 @@ function generateActionSummary(results, packageType, totals) {
   // using strong tags instead of ** because the latter gets printed as a literal
   const resultItems = results.map((r) => {
     if (r.skipped) {
-      return `<strong>>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
+      return `<strong>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
     } else if (packageType.toLowerCase() === "container" && r.digestsSucceeded !== undefined) {
       // For container packages, show breakdown of digests and tags
       const digestsTotal = (r.digestsSucceeded || 0) + (r.digestsFailed || 0);

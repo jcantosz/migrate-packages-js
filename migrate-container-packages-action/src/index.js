@@ -3,9 +3,8 @@ import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { getBaseHostname, createOctokitClient, outputResults } from "../../shared/utils.js";
+import { getBaseHostname, createOctokitClient, outputResults, withRetry } from "../../shared/utils.js";
 
-const SKOPEO_RETRIES = 3;
 /**
  * Get registry URL based on API URL or use custom registry URL if provided
  * @param {string} apiUrl - GitHub API URL (e.g., https://api.github.com)
@@ -90,6 +89,35 @@ function executeSkopeoCommand(skopeoCommand) {
  * @returns {boolean} - Success status
  */
 async function migrateImageReference(packageName, reference, context, isDigest) {
+  const referenceType = isDigest ? "digest" : "tag";
+  const referencePrefix = isDigest ? "@" : ":";
+
+  // Use the withRetry function from shared utils with p-retry
+  try {
+    return await withRetry(() => performImageMigration(packageName, reference, context, isDigest), {
+      onRetry: (error, attempt) => {
+        core.info(
+          `Retry attempt ${attempt} for ${packageName}${referencePrefix}${reference} after error: ${error.message}`
+        );
+      },
+    });
+  } catch (err) {
+    core.warning(
+      `Failed to migrate ${packageName}${referencePrefix}${reference} after multiple attempts: ${err.message}`
+    );
+    return false;
+  }
+}
+
+/**
+ * Performs the actual image migration operation
+ * @param {string} packageName - Name of the package
+ * @param {string} reference - Tag or SHA reference
+ * @param {object} context - Migration context
+ * @param {boolean} isDigest - Whether the reference is a digest (SHA) or tag
+ * @returns {boolean} - Success status
+ */
+async function performImageMigration(packageName, reference, context, isDigest) {
   const {
     sourceOrg,
     sourceApiUrl,
@@ -101,30 +129,26 @@ async function migrateImageReference(packageName, reference, context, isDigest) 
     ghTargetPat,
   } = context;
 
-  try {
-    // Determine registries and build image references
-    const sourceRegistry = getRegistryUrl(sourceApiUrl, sourceRegistryUrl);
-    const targetRegistry = getRegistryUrl(targetApiUrl, targetRegistryUrl);
+  const referenceType = isDigest ? "digest" : "tag";
+  const referencePrefix = isDigest ? "@" : ":";
 
-    // Build source and target image references
-    const sourceImage = buildImageReference(sourceRegistry, sourceOrg, packageName, reference, isDigest);
-    const targetImage = buildImageReference(targetRegistry, targetOrg, packageName, reference, isDigest);
+  // Determine registries and build image references
+  const sourceRegistry = getRegistryUrl(sourceApiUrl, sourceRegistryUrl);
+  const targetRegistry = getRegistryUrl(targetApiUrl, targetRegistryUrl);
 
-    const referenceType = isDigest ? "digest" : "tag";
-    const referencePrefix = isDigest ? "@" : ":";
-    core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
+  // Build source and target image references
+  const sourceImage = buildImageReference(sourceRegistry, sourceOrg, packageName, reference, isDigest);
+  const targetImage = buildImageReference(targetRegistry, targetOrg, packageName, reference, isDigest);
 
-    // Build and execute Skopeo command
-    const skopeoCommand = `skopeo copy --preserve-digests --all --retry-times ${SKOPEO_RETRIES} --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
+  core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
 
-    executeSkopeoCommand(skopeoCommand);
+  // Build and execute Skopeo command
+  const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
-    core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
-    return true;
-  } catch (err) {
-    core.warning(`Failed to migrate ${packageName}${referencePrefix}${reference}: ${err.message}`);
-    return false;
-  }
+  executeSkopeoCommand(skopeoCommand);
+
+  core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
+  return true;
 }
 
 /**

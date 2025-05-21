@@ -12,6 +12,7 @@ import {
   getNuGetRegistryUrl,
   getBaseHostname,
   outputResults,
+  withRetry,
 } from "../../shared/utils.js";
 
 /**
@@ -19,8 +20,8 @@ import {
  * @returns {string} - Path to the temp directory
  */
 function setupEnvironment() {
-  // Create a temp directory
-  const tempDir = path.join(os.tmpdir(), "nuget-migrate-" + Math.random().toString(36).substring(2, 10));
+  const timestamp = Date.now();
+  const tempDir = path.join(os.tmpdir(), `nuget-migrate-${timestamp}`);
   core.info(`Creating temp directory: ${tempDir}`);
 
   fs.mkdirSync(tempDir, { recursive: true });
@@ -238,29 +239,54 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApi
  * @returns {boolean} - True if successful
  */
 async function migrateVersion(packageName, version, repoName, context, tempDir, gprPath) {
-  const { sourceOrg, sourceRegistryUrl, targetOrg, targetApiUrl, ghSourcePat, ghTargetPat } = context;
-
+  // Use withRetry function from shared utils with p-retry
   try {
-    // Download the package
-    const packagePath = await downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, ghSourcePat, tempDir);
-
-    // Fix the package (remove duplicate entries)
-    const fixResult = fixNuGetPackage(packagePath);
-    if (!fixResult) {
-      throw new Error(`Failed to fix package ${packageName} version ${version}`);
-    }
-
-    // Push the package to the target
-    const pushResult = pushPackage(packagePath, gprPath, targetOrg, repoName, ghTargetPat, targetApiUrl);
-    if (!pushResult) {
-      throw new Error(`Failed to push package ${packageName} version ${version}`);
-    }
-
-    return true;
+    return await withRetry(
+      () => performNuGetVersionMigration(packageName, version, repoName, context, tempDir, gprPath),
+      {
+        retries: 3,
+        minTimeout: 2000,
+        maxTimeout: 10000,
+        onRetry: (error, attempt) => {
+          core.info(`Retry attempt ${attempt} for ${packageName} version ${version} after error: ${error.message}`);
+        },
+      }
+    );
   } catch (err) {
-    core.warning(`Failed to migrate ${packageName} version ${version}: ${err.message}`);
+    core.warning(`Failed to migrate ${packageName} version ${version} after multiple attempts: ${err.message}`);
     return false;
   }
+}
+
+/**
+ * Performs the actual NuGet package version migration
+ * @param {string} packageName - Package name
+ * @param {string} version - Package version
+ * @param {string} repoName - Repository name
+ * @param {Object} context - Migration context
+ * @param {string} tempDir - Temporary directory
+ * @param {string} gprPath - Path to the GPR tool
+ * @returns {boolean} - True if successful
+ */
+async function performNuGetVersionMigration(packageName, version, repoName, context, tempDir, gprPath) {
+  const { sourceOrg, sourceRegistryUrl, targetOrg, targetApiUrl, ghSourcePat, ghTargetPat } = context;
+
+  // Download the package
+  const packagePath = await downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, ghSourcePat, tempDir);
+
+  // Fix the package (remove duplicate entries)
+  const fixResult = fixNuGetPackage(packagePath);
+  if (!fixResult) {
+    throw new Error(`Failed to fix package ${packageName} version ${version}`);
+  }
+
+  // Push the package to the target
+  const pushResult = pushPackage(packagePath, gprPath, targetOrg, repoName, ghTargetPat, targetApiUrl);
+  if (!pushResult) {
+    throw new Error(`Failed to push package ${packageName} version ${version}`);
+  }
+
+  return true;
 }
 
 /**
