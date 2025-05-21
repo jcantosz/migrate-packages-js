@@ -115,7 +115,7 @@ async function migrateImageReference(packageName, reference, context, isDigest) 
     core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
 
     // Build and execute Skopeo command
-    const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds --retry-times ${SKOPEO_RETRIES} USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
+    const skopeoCommand = `skopeo copy --preserve-digests --all --retry-times ${SKOPEO_RETRIES} --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
     executeSkopeoCommand(skopeoCommand);
 
