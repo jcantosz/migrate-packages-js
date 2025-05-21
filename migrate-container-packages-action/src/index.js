@@ -3,7 +3,7 @@ import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { getBaseHostname } from "../../shared/utils.js";
+import { getBaseHostname, createOctokitClient, outputResults } from "../../shared/utils.js";
 
 /**
  * Get registry URL based on API URL or use custom registry URL if provided
@@ -250,25 +250,6 @@ async function migratePackage(pkg, context) {
 }
 
 /**
- * Format migration results as a summary
- * @param {Array} results - Migration results
- * @returns {string} - Formatted summary
- */
-function formatResults(results) {
-  let summary = "Migration completed. Summary:\n";
-
-  results.forEach((r) => {
-    if (r.skipped) {
-      summary += `- ${r.package}: SKIPPED (${r.reason})\n`;
-    } else {
-      summary += `- ${r.package}: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed\n`;
-    }
-  });
-
-  return summary;
-}
-
-/**
  * Generate a summary using GitHub Actions core.summary and return the text summary
  * @param {Array} results - Migration results
  * @returns {string} - Text summary for console output and action outputs
@@ -381,11 +362,8 @@ async function run() {
       throw new Error("Failed to set up Skopeo. Migration cannot continue.");
     }
 
-    // Set up Octokit client
-    const octokitSource = new Octokit({
-      auth: ghSourcePat,
-      baseUrl: sourceApiUrl,
-    });
+    // Set up Octokit client using the shared utility function
+    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
 
     // Prepare context with all configuration
     const context = {
@@ -407,34 +385,8 @@ async function run() {
       results.push(result);
     }
 
-    // Generate summary and output results
-    const summary = generateActionSummary(results);
-
-    // Log summary to console
-    core.info(`\n=== CONTAINER Migration Summary ===`);
-    core.info(`Total packages processed: ${results.length}`);
-    const totalDigestsSucceeded = results.reduce((acc, r) => acc + (r.digestsSucceeded || 0), 0);
-    const totalDigestsFailed = results.reduce((acc, r) => acc + (r.digestsFailed || 0), 0);
-    const totalTagsSucceeded = results.reduce((acc, r) => acc + (r.tagsSucceeded || 0), 0);
-    const totalTagsFailed = results.reduce((acc, r) => acc + (r.tagsFailed || 0), 0);
-    core.info(`Total digests succeeded: ${totalDigestsSucceeded}`);
-    core.info(`Total digests failed: ${totalDigestsFailed}`);
-    core.info(`Total tags succeeded: ${totalTagsSucceeded}`);
-    core.info(`Total tags failed: ${totalTagsFailed}`);
-    core.info(summary);
-
-    // Set outputs
-    core.setOutput("result", JSON.stringify(results));
-    core.setOutput("result-summary", summary);
-
-    // Set job status based on results
-    if ((totalDigestsFailed > 0 || totalTagsFailed > 0) && totalDigestsSucceeded === 0 && totalTagsSucceeded === 0) {
-      core.setFailed(`All container package migrations failed`);
-    } else if (totalDigestsFailed > 0 || totalTagsFailed > 0) {
-      core.warning(`Some container package migrations failed`);
-    }
-
-    core.info("Container migration complete.");
+    // Output results using the shared utility function
+    outputResults(results, "container");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
   }

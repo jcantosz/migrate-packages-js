@@ -52939,183 +52939,6 @@ module.exports = parseParams
 
 /***/ }),
 
-/***/ 6572:
-/***/ ((module) => {
-
-var __webpack_unused_export__;
-
-
-const NullObject = function NullObject () { }
-NullObject.prototype = Object.create(null)
-
-/**
- * RegExp to match *( ";" parameter ) in RFC 7231 sec 3.1.1.1
- *
- * parameter     = token "=" ( token / quoted-string )
- * token         = 1*tchar
- * tchar         = "!" / "#" / "$" / "%" / "&" / "'" / "*"
- *               / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
- *               / DIGIT / ALPHA
- *               ; any VCHAR, except delimiters
- * quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
- * qdtext        = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text
- * obs-text      = %x80-FF
- * quoted-pair   = "\" ( HTAB / SP / VCHAR / obs-text )
- */
-const paramRE = /; *([!#$%&'*+.^\w`|~-]+)=("(?:[\v\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\v\u0020-\u00ff])*"|[!#$%&'*+.^\w`|~-]+) */gu
-
-/**
- * RegExp to match quoted-pair in RFC 7230 sec 3.2.6
- *
- * quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
- * obs-text    = %x80-FF
- */
-const quotedPairRE = /\\([\v\u0020-\u00ff])/gu
-
-/**
- * RegExp to match type in RFC 7231 sec 3.1.1.1
- *
- * media-type = type "/" subtype
- * type       = token
- * subtype    = token
- */
-const mediaTypeRE = /^[!#$%&'*+.^\w|~-]+\/[!#$%&'*+.^\w|~-]+$/u
-
-// default ContentType to prevent repeated object creation
-const defaultContentType = { type: '', parameters: new NullObject() }
-Object.freeze(defaultContentType.parameters)
-Object.freeze(defaultContentType)
-
-/**
- * Parse media type to object.
- *
- * @param {string|object} header
- * @return {Object}
- * @public
- */
-
-function parse (header) {
-  if (typeof header !== 'string') {
-    throw new TypeError('argument header is required and must be a string')
-  }
-
-  let index = header.indexOf(';')
-  const type = index !== -1
-    ? header.slice(0, index).trim()
-    : header.trim()
-
-  if (mediaTypeRE.test(type) === false) {
-    throw new TypeError('invalid media type')
-  }
-
-  const result = {
-    type: type.toLowerCase(),
-    parameters: new NullObject()
-  }
-
-  // parse parameters
-  if (index === -1) {
-    return result
-  }
-
-  let key
-  let match
-  let value
-
-  paramRE.lastIndex = index
-
-  while ((match = paramRE.exec(header))) {
-    if (match.index !== index) {
-      throw new TypeError('invalid parameter format')
-    }
-
-    index += match[0].length
-    key = match[1].toLowerCase()
-    value = match[2]
-
-    if (value[0] === '"') {
-      // remove quotes and escapes
-      value = value
-        .slice(1, value.length - 1)
-
-      quotedPairRE.test(value) && (value = value.replace(quotedPairRE, '$1'))
-    }
-
-    result.parameters[key] = value
-  }
-
-  if (index !== header.length) {
-    throw new TypeError('invalid parameter format')
-  }
-
-  return result
-}
-
-function safeParse (header) {
-  if (typeof header !== 'string') {
-    return defaultContentType
-  }
-
-  let index = header.indexOf(';')
-  const type = index !== -1
-    ? header.slice(0, index).trim()
-    : header.trim()
-
-  if (mediaTypeRE.test(type) === false) {
-    return defaultContentType
-  }
-
-  const result = {
-    type: type.toLowerCase(),
-    parameters: new NullObject()
-  }
-
-  // parse parameters
-  if (index === -1) {
-    return result
-  }
-
-  let key
-  let match
-  let value
-
-  paramRE.lastIndex = index
-
-  while ((match = paramRE.exec(header))) {
-    if (match.index !== index) {
-      return defaultContentType
-    }
-
-    index += match[0].length
-    key = match[1].toLowerCase()
-    value = match[2]
-
-    if (value[0] === '"') {
-      // remove quotes and escapes
-      value = value
-        .slice(1, value.length - 1)
-
-      quotedPairRE.test(value) && (value = value.replace(quotedPairRE, '$1'))
-    }
-
-    result.parameters[key] = value
-  }
-
-  if (index !== header.length) {
-    return defaultContentType
-  }
-
-  return result
-}
-
-__webpack_unused_export__ = { parse, safeParse }
-__webpack_unused_export__ = parse
-module.exports.As = safeParse
-__webpack_unused_export__ = defaultContentType
-
-
-/***/ }),
-
 /***/ 6556:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -54727,6 +54550,183 @@ function parseParams (str) {
 module.exports = parseParams
 
 
+/***/ }),
+
+/***/ 4801:
+/***/ ((module) => {
+
+var __webpack_unused_export__;
+
+
+const NullObject = function NullObject () { }
+NullObject.prototype = Object.create(null)
+
+/**
+ * RegExp to match *( ";" parameter ) in RFC 7231 sec 3.1.1.1
+ *
+ * parameter     = token "=" ( token / quoted-string )
+ * token         = 1*tchar
+ * tchar         = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+ *               / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+ *               / DIGIT / ALPHA
+ *               ; any VCHAR, except delimiters
+ * quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
+ * qdtext        = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text
+ * obs-text      = %x80-FF
+ * quoted-pair   = "\" ( HTAB / SP / VCHAR / obs-text )
+ */
+const paramRE = /; *([!#$%&'*+.^\w`|~-]+)=("(?:[\v\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\v\u0020-\u00ff])*"|[!#$%&'*+.^\w`|~-]+) */gu
+
+/**
+ * RegExp to match quoted-pair in RFC 7230 sec 3.2.6
+ *
+ * quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
+ * obs-text    = %x80-FF
+ */
+const quotedPairRE = /\\([\v\u0020-\u00ff])/gu
+
+/**
+ * RegExp to match type in RFC 7231 sec 3.1.1.1
+ *
+ * media-type = type "/" subtype
+ * type       = token
+ * subtype    = token
+ */
+const mediaTypeRE = /^[!#$%&'*+.^\w|~-]+\/[!#$%&'*+.^\w|~-]+$/u
+
+// default ContentType to prevent repeated object creation
+const defaultContentType = { type: '', parameters: new NullObject() }
+Object.freeze(defaultContentType.parameters)
+Object.freeze(defaultContentType)
+
+/**
+ * Parse media type to object.
+ *
+ * @param {string|object} header
+ * @return {Object}
+ * @public
+ */
+
+function parse (header) {
+  if (typeof header !== 'string') {
+    throw new TypeError('argument header is required and must be a string')
+  }
+
+  let index = header.indexOf(';')
+  const type = index !== -1
+    ? header.slice(0, index).trim()
+    : header.trim()
+
+  if (mediaTypeRE.test(type) === false) {
+    throw new TypeError('invalid media type')
+  }
+
+  const result = {
+    type: type.toLowerCase(),
+    parameters: new NullObject()
+  }
+
+  // parse parameters
+  if (index === -1) {
+    return result
+  }
+
+  let key
+  let match
+  let value
+
+  paramRE.lastIndex = index
+
+  while ((match = paramRE.exec(header))) {
+    if (match.index !== index) {
+      throw new TypeError('invalid parameter format')
+    }
+
+    index += match[0].length
+    key = match[1].toLowerCase()
+    value = match[2]
+
+    if (value[0] === '"') {
+      // remove quotes and escapes
+      value = value
+        .slice(1, value.length - 1)
+
+      quotedPairRE.test(value) && (value = value.replace(quotedPairRE, '$1'))
+    }
+
+    result.parameters[key] = value
+  }
+
+  if (index !== header.length) {
+    throw new TypeError('invalid parameter format')
+  }
+
+  return result
+}
+
+function safeParse (header) {
+  if (typeof header !== 'string') {
+    return defaultContentType
+  }
+
+  let index = header.indexOf(';')
+  const type = index !== -1
+    ? header.slice(0, index).trim()
+    : header.trim()
+
+  if (mediaTypeRE.test(type) === false) {
+    return defaultContentType
+  }
+
+  const result = {
+    type: type.toLowerCase(),
+    parameters: new NullObject()
+  }
+
+  // parse parameters
+  if (index === -1) {
+    return result
+  }
+
+  let key
+  let match
+  let value
+
+  paramRE.lastIndex = index
+
+  while ((match = paramRE.exec(header))) {
+    if (match.index !== index) {
+      return defaultContentType
+    }
+
+    index += match[0].length
+    key = match[1].toLowerCase()
+    value = match[2]
+
+    if (value[0] === '"') {
+      // remove quotes and escapes
+      value = value
+        .slice(1, value.length - 1)
+
+      quotedPairRE.test(value) && (value = value.replace(quotedPairRE, '$1'))
+    }
+
+    result.parameters[key] = value
+  }
+
+  if (index !== header.length) {
+    return defaultContentType
+  }
+
+  return result
+}
+
+__webpack_unused_export__ = { parse, safeParse }
+__webpack_unused_export__ = parse
+module.exports.As = safeParse
+__webpack_unused_export__ = defaultContentType
+
+
 /***/ })
 
 /******/ });
@@ -54773,7 +54773,15 @@ var __webpack_exports__ = {};
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var lib_core = __nccwpck_require__(4097);
-;// CONCATENATED MODULE: ./node_modules/universal-user-agent/index.js
+// EXTERNAL MODULE: external "fs"
+var external_fs_ = __nccwpck_require__(7147);
+// EXTERNAL MODULE: external "path"
+var external_path_ = __nccwpck_require__(1017);
+// EXTERNAL MODULE: external "child_process"
+var external_child_process_ = __nccwpck_require__(2081);
+// EXTERNAL MODULE: ../node_modules/@actions/core/lib/core.js
+var core_lib_core = __nccwpck_require__(2341);
+;// CONCATENATED MODULE: ../node_modules/universal-user-agent/index.js
 function getUserAgent() {
   if (typeof navigator === "object" && "userAgent" in navigator) {
     return navigator.userAgent;
@@ -54788,7 +54796,7 @@ function getUserAgent() {
   return "<environment undetectable>";
 }
 
-;// CONCATENATED MODULE: ./node_modules/before-after-hook/lib/register.js
+;// CONCATENATED MODULE: ../node_modules/before-after-hook/lib/register.js
 // @ts-check
 
 function register(state, name, method, options) {
@@ -54817,7 +54825,7 @@ function register(state, name, method, options) {
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/before-after-hook/lib/add.js
+;// CONCATENATED MODULE: ../node_modules/before-after-hook/lib/add.js
 // @ts-check
 
 function addHook(state, kind, name, hook) {
@@ -54865,7 +54873,7 @@ function addHook(state, kind, name, hook) {
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/before-after-hook/lib/remove.js
+;// CONCATENATED MODULE: ../node_modules/before-after-hook/lib/remove.js
 // @ts-check
 
 function removeHook(state, name, method) {
@@ -54886,7 +54894,7 @@ function removeHook(state, name, method) {
   state.registry[name].splice(index, 1);
 }
 
-;// CONCATENATED MODULE: ./node_modules/before-after-hook/index.js
+;// CONCATENATED MODULE: ../node_modules/before-after-hook/index.js
 // @ts-check
 
 
@@ -54933,7 +54941,7 @@ function Collection() {
 
 /* harmony default export */ const before_after_hook = ({ Singular, Collection });
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/endpoint/dist-bundle/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/endpoint/dist-bundle/index.js
 // pkg/dist-src/defaults.js
 
 
@@ -55279,9 +55287,9 @@ function withDefaults(oldDefaults, newDefaults) {
 var endpoint = withDefaults(null, DEFAULTS);
 
 
-// EXTERNAL MODULE: ./node_modules/fast-content-type-parse/index.js
-var fast_content_type_parse = __nccwpck_require__(6572);
-;// CONCATENATED MODULE: ./node_modules/@octokit/request-error/dist-src/index.js
+// EXTERNAL MODULE: ../node_modules/fast-content-type-parse/index.js
+var fast_content_type_parse = __nccwpck_require__(4801);
+;// CONCATENATED MODULE: ../node_modules/@octokit/request-error/dist-src/index.js
 class RequestError extends Error {
   name;
   /**
@@ -55321,7 +55329,7 @@ class RequestError extends Error {
 }
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/request/dist-bundle/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/request/dist-bundle/index.js
 // pkg/dist-src/index.js
 
 
@@ -55517,7 +55525,7 @@ function dist_bundle_withDefaults(oldEndpoint, newDefaults) {
 var request = dist_bundle_withDefaults(endpoint, defaults_default);
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/graphql/dist-bundle/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/graphql/dist-bundle/index.js
 // pkg/dist-src/index.js
 
 
@@ -55644,7 +55652,7 @@ function withCustomRequest(customRequest) {
 }
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/auth-token/dist-bundle/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/auth-token/dist-bundle/index.js
 // pkg/dist-src/is-jwt.js
 var b64url = "(?:[a-zA-Z0-9_-]+)";
 var sep = "\\.";
@@ -55699,11 +55707,11 @@ var createTokenAuth = function createTokenAuth2(token) {
 };
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/core/dist-src/version.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/core/dist-src/version.js
 const version_VERSION = "6.1.5";
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/core/dist-src/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/core/dist-src/index.js
 
 
 
@@ -55715,7 +55723,7 @@ const noop = () => {
 const consoleWarn = console.warn.bind(console);
 const consoleError = console.error.bind(console);
 const userAgentTrail = `octokit-core.js/${version_VERSION} ${getUserAgent()}`;
-class dist_src_Octokit {
+class Octokit {
   static VERSION = version_VERSION;
   static defaults(defaults) {
     const OctokitWithDefaults = class extends this {
@@ -55837,11 +55845,11 @@ class dist_src_Octokit {
 }
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-request-log/dist-src/version.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-request-log/dist-src/version.js
 const dist_src_version_VERSION = "5.3.1";
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-request-log/dist-src/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-request-log/dist-src/index.js
 
 function requestLog(octokit) {
   octokit.hook.wrap("request", (request, options) => {
@@ -55867,7 +55875,7 @@ function requestLog(octokit) {
 requestLog.VERSION = dist_src_version_VERSION;
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js
 // pkg/dist-src/version.js
 var plugin_paginate_rest_dist_bundle_VERSION = "0.0.0-development";
 
@@ -56253,12 +56261,12 @@ function paginateRest(octokit) {
 paginateRest.VERSION = plugin_paginate_rest_dist_bundle_VERSION;
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/version.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/version.js
 const plugin_rest_endpoint_methods_dist_src_version_VERSION = "13.5.0";
 
 //# sourceMappingURL=version.js.map
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/generated/endpoints.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/generated/endpoints.js
 const Endpoints = {
   actions: {
     addCustomLabelsToSelfHostedRunnerForOrg: [
@@ -58589,7 +58597,7 @@ var endpoints_default = Endpoints;
 
 //# sourceMappingURL=endpoints.js.map
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/endpoints-to-methods.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/endpoints-to-methods.js
 
 const endpointMethodsMap = /* @__PURE__ */ new Map();
 for (const [scope, endpoints] of Object.entries(endpoints_default)) {
@@ -58715,7 +58723,7 @@ function decorate(octokit, scope, methodName, defaults, decorations) {
 
 //# sourceMappingURL=endpoints-to-methods.js.map
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/index.js
 
 
 function restEndpointMethods(octokit) {
@@ -58736,31 +58744,23 @@ legacyRestEndpointMethods.VERSION = plugin_rest_endpoint_methods_dist_src_versio
 
 //# sourceMappingURL=index.js.map
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/rest/dist-src/version.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/rest/dist-src/version.js
 const rest_dist_src_version_VERSION = "21.1.1";
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/rest/dist-src/index.js
+;// CONCATENATED MODULE: ../node_modules/@octokit/rest/dist-src/index.js
 
 
 
 
 
-const rest_dist_src_Octokit = dist_src_Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRest).defaults(
+const dist_src_Octokit = Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRest).defaults(
   {
     userAgent: `octokit-rest.js/${rest_dist_src_version_VERSION}`
   }
 );
 
 
-// EXTERNAL MODULE: external "fs"
-var external_fs_ = __nccwpck_require__(7147);
-// EXTERNAL MODULE: external "path"
-var external_path_ = __nccwpck_require__(1017);
-// EXTERNAL MODULE: external "child_process"
-var external_child_process_ = __nccwpck_require__(2081);
-// EXTERNAL MODULE: ../node_modules/@actions/core/lib/core.js
-var core_lib_core = __nccwpck_require__(2341);
 ;// CONCATENATED MODULE: ../shared/utils.js
 
 
@@ -58821,7 +58821,7 @@ function parsePackagesInput(packagesJson, packageType) {
  * Create an Octokit client
  */
 function createOctokitClient(token, apiUrl) {
-  return new Octokit({
+  return new dist_src_Octokit({
     auth: token,
     baseUrl: apiUrl,
   });
@@ -58963,24 +58963,24 @@ function outputResults(results, packageType) {
   const summary = generateActionSummary(results, packageType);
 
   // Log summary to console
-  core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
-  core.info(`Total packages processed: ${totalPackages}`);
-  core.info(`Successful version migrations: ${totalSuccess}`);
-  core.info(`Failed version migrations: ${totalFailed}`);
+  core_lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
+  core_lib_core.info(`Total packages processed: ${totalPackages}`);
+  core_lib_core.info(`Successful version migrations: ${totalSuccess}`);
+  core_lib_core.info(`Failed version migrations: ${totalFailed}`);
   if (totalSkipped > 0) {
-    core.info(`Skipped packages: ${totalSkipped}`);
+    core_lib_core.info(`Skipped packages: ${totalSkipped}`);
   }
-  core.info(summary);
+  core_lib_core.info(summary);
 
   // Set output
-  core.setOutput("result", JSON.stringify(results));
-  core.setOutput("result-summary", summary);
+  core_lib_core.setOutput("result", JSON.stringify(results));
+  core_lib_core.setOutput("result-summary", summary);
 
   // Set job status based on results
   if (totalFailed > 0 && totalSuccess === 0) {
-    core.setFailed(`All ${packageType} package migrations failed`);
+    core_lib_core.setFailed(`All ${packageType} package migrations failed`);
   } else if (totalFailed > 0) {
-    core.warning(`Some ${packageType} package migrations failed`);
+    core_lib_core.warning(`Some ${packageType} package migrations failed`);
   }
 }
 
@@ -58998,15 +58998,13 @@ function generateActionSummary(results, packageType) {
   const totalSkipped = results.filter((r) => r.skipped).length;
 
   // Start building the GitHub summary
-  core.summary
-    .addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
+  core_lib_core.summary.addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
     .addRaw("Migration completed.")
     .addBreak()
     .addBreak();
 
   // Add statistics table
-  core.summary
-    .addTable([
+  core_lib_core.summary.addTable([
       [
         { data: "Statistics", header: true },
         { data: "Count", header: true },
@@ -59019,7 +59017,7 @@ function generateActionSummary(results, packageType) {
     .addBreak();
 
   // Add results list with core.summary.addList
-  core.summary.addHeading("Per-Package Results:", 3);
+  core_lib_core.summary.addHeading("Per-Package Results:", 3);
 
   // Create an array of formatted results for the list WITH Markdown formatting
   const markdownResultItems = results.map((r) => {
@@ -59031,10 +59029,10 @@ function generateActionSummary(results, packageType) {
   });
 
   // Add the list to the summary
-  core.summary.addList(markdownResultItems);
+  core_lib_core.summary.addList(markdownResultItems);
 
   // Write the summary to the output
-  core.summary.write();
+  core_lib_core.summary.write();
 
   // Create plain text results WITHOUT Markdown formatting
   const plainTextResultItems = results.map((r) => {
@@ -59333,25 +59331,6 @@ async function migratePackage(pkg, context) {
 }
 
 /**
- * Format migration results as a summary
- * @param {Array} results - Migration results
- * @returns {string} - Formatted summary
- */
-function formatResults(results) {
-  let summary = "Migration completed. Summary:\n";
-
-  results.forEach((r) => {
-    if (r.skipped) {
-      summary += `- ${r.package}: SKIPPED (${r.reason})\n`;
-    } else {
-      summary += `- ${r.package}: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed\n`;
-    }
-  });
-
-  return summary;
-}
-
-/**
  * Generate a summary using GitHub Actions core.summary and return the text summary
  * @param {Array} results - Migration results
  * @returns {string} - Text summary for console output and action outputs
@@ -59366,10 +59345,11 @@ function src_generateActionSummary(results) {
   const totalSkipped = results.filter((r) => r.skipped).length;
 
   // Start building the GitHub summary
-  lib_core.summary.addHeading("Container Package Migration", 2).addRaw("Migration completed.").addBreak().addBreak();
+  core.summary.addHeading("Container Package Migration", 2).addRaw("Migration completed.").addBreak().addBreak();
 
   // Add statistics table
-  lib_core.summary.addTable([
+  core.summary
+    .addTable([
       [
         { data: "Statistics", header: true },
         { data: "Count", header: true },
@@ -59384,7 +59364,7 @@ function src_generateActionSummary(results) {
     .addBreak();
 
   // Add results list with core.summary.addList
-  lib_core.summary.addHeading("Per-Package Results:", 3);
+  core.summary.addHeading("Per-Package Results:", 3);
 
   // Create an array of formatted results for the list WITH Markdown formatting
   const markdownResultItems = results.map((r) => {
@@ -59396,10 +59376,10 @@ function src_generateActionSummary(results) {
   });
 
   // Add the list to the summary
-  lib_core.summary.addList(markdownResultItems);
+  core.summary.addList(markdownResultItems);
 
   // Write the summary to the output
-  lib_core.summary.write();
+  core.summary.write();
 
   // Create plain text results WITHOUT Markdown formatting
   const plainTextResultItems = results.map((r) => {
@@ -59463,11 +59443,8 @@ async function run() {
       throw new Error("Failed to set up Skopeo. Migration cannot continue.");
     }
 
-    // Set up Octokit client
-    const octokitSource = new rest_dist_src_Octokit({
-      auth: ghSourcePat,
-      baseUrl: sourceApiUrl,
-    });
+    // Set up Octokit client using the shared utility function
+    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
 
     // Prepare context with all configuration
     const context = {
@@ -59489,34 +59466,8 @@ async function run() {
       results.push(result);
     }
 
-    // Generate summary and output results
-    const summary = src_generateActionSummary(results);
-
-    // Log summary to console
-    lib_core.info(`\n=== CONTAINER Migration Summary ===`);
-    lib_core.info(`Total packages processed: ${results.length}`);
-    const totalDigestsSucceeded = results.reduce((acc, r) => acc + (r.digestsSucceeded || 0), 0);
-    const totalDigestsFailed = results.reduce((acc, r) => acc + (r.digestsFailed || 0), 0);
-    const totalTagsSucceeded = results.reduce((acc, r) => acc + (r.tagsSucceeded || 0), 0);
-    const totalTagsFailed = results.reduce((acc, r) => acc + (r.tagsFailed || 0), 0);
-    lib_core.info(`Total digests succeeded: ${totalDigestsSucceeded}`);
-    lib_core.info(`Total digests failed: ${totalDigestsFailed}`);
-    lib_core.info(`Total tags succeeded: ${totalTagsSucceeded}`);
-    lib_core.info(`Total tags failed: ${totalTagsFailed}`);
-    lib_core.info(summary);
-
-    // Set outputs
-    lib_core.setOutput("result", JSON.stringify(results));
-    lib_core.setOutput("result-summary", summary);
-
-    // Set job status based on results
-    if ((totalDigestsFailed > 0 || totalTagsFailed > 0) && totalDigestsSucceeded === 0 && totalTagsSucceeded === 0) {
-      lib_core.setFailed(`All container package migrations failed`);
-    } else if (totalDigestsFailed > 0 || totalTagsFailed > 0) {
-      lib_core.warning(`Some container package migrations failed`);
-    }
-
-    lib_core.info("Container migration complete.");
+    // Output results using the shared utility function
+    outputResults(results, "container");
   } catch (error) {
     lib_core.setFailed(`Action failed: ${error.message}`);
   }

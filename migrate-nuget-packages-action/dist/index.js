@@ -71261,25 +71261,6 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
 }
 
 /**
- * Format migration results as a summary
- * @param {Array} results - Migration results
- * @returns {string} - Formatted summary
- */
-function formatResults(results) {
-  let summary = "Migration completed. Summary:\n";
-
-  results.forEach((r) => {
-    if (r.skipped) {
-      summary += `- ${r.package}: SKIPPED (${r.reason})\n`;
-    } else {
-      summary += `- ${r.package}: ${r.versionsSucceeded} versions succeeded, ${r.versionsFailed} versions failed\n`;
-    }
-  });
-
-  return summary;
-}
-
-/**
  * Parse packages input from JSON
  * @param {string} packagesJson - JSON string
  * @returns {Array} - Parsed packages
