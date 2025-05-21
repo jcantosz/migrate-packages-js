@@ -5,6 +5,7 @@ import path from "path";
 import { execSync } from "child_process";
 import { getBaseHostname, createOctokitClient, outputResults } from "../../shared/utils.js";
 
+const SKOPEO_RETRIES = 3;
 /**
  * Get registry URL based on API URL or use custom registry URL if provided
  * @param {string} apiUrl - GitHub API URL (e.g., https://api.github.com)
@@ -114,7 +115,7 @@ async function migrateImageReference(packageName, reference, context, isDigest) 
     core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
 
     // Build and execute Skopeo command
-    const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
+    const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds --retry-times ${SKOPEO_RETRIES} USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
     executeSkopeoCommand(skopeoCommand);
 
@@ -229,6 +230,8 @@ async function migratePackage(pkg, context) {
       digestsFailed: 0,
       tagsSucceeded: 0,
       tagsFailed: 0,
+      succeeded: 0, // Standard property for shared utilities
+      failed: 0, // Standard property for shared utilities
       skipped: true,
       reason: "No versions found",
     };
@@ -240,12 +243,18 @@ async function migratePackage(pkg, context) {
   // Then copy all image tags
   const tagResults = await migrateTags(packageName, versions, context);
 
+  // Calculate total success and failure counts
+  const totalSucceeded = digestResults.successCount + tagResults.successCount;
+  const totalFailed = digestResults.failureCount + tagResults.failureCount;
+
   return {
     package: packageName,
     digestsSucceeded: digestResults.successCount,
     digestsFailed: digestResults.failureCount,
     tagsSucceeded: tagResults.successCount,
     tagsFailed: tagResults.failureCount,
+    succeeded: totalSucceeded, // Standard property for shared utilities
+    failed: totalFailed, // Standard property for shared utilities
   };
 }
 

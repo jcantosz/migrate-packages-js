@@ -58958,17 +58958,30 @@ function outputResults(results, packageType) {
     packages: results.length,
     success: results.reduce((acc, r) => acc + (r.succeeded || 0), 0),
     failed: results.reduce((acc, r) => acc + (r.failed || 0), 0),
-    skipped: results.filter((r) => r.skipped).length
+    skipped: results.filter((r) => r.skipped).length,
   };
-
-  // Generate both GitHub markdown summary and plain text summary
-  const summary = generateActionSummary(results, packageType, totals);
 
   // Log summary to console
   lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
   lib_core.info(`Total packages processed: ${totals.packages}`);
   lib_core.info(`Successful version migrations: ${totals.success}`);
   lib_core.info(`Failed version migrations: ${totals.failed}`);
+
+  // For container packages, also calculate digest and tag totals
+  if (packageType.toLowerCase() === "container") {
+    totals.digestsSucceeded = results.reduce((acc, r) => acc + (r.digestsSucceeded || 0), 0);
+    totals.digestsFailed = results.reduce((acc, r) => acc + (r.digestsFailed || 0), 0);
+    totals.tagsSucceeded = results.reduce((acc, r) => acc + (r.tagsSucceeded || 0), 0);
+    totals.tagsFailed = results.reduce((acc, r) => acc + (r.tagsFailed || 0), 0);
+    lib_core.info(`Successful digest migrations: ${totals.digestsSucceeded}`);
+    lib_core.info(`Failed digest migrations: ${totals.digestsFailed}`);
+    lib_core.info(`Successful tag migrations: ${totals.tagsSucceeded}`);
+    lib_core.info(`Failed tag migrations: ${totals.tagsFailed}`);
+  }
+
+  // Generate both GitHub markdown summary and plain text summary
+  const summary = generateActionSummary(results, packageType, totals);
+
   if (totals.skipped > 0) {
     lib_core.info(`Skipped packages: ${totals.skipped}`);
   }
@@ -59016,32 +59029,30 @@ function generateActionSummary(results, packageType, totals) {
   // Add results list with core.summary.addList
   lib_core.summary.addHeading("Per-Package Results:", 3);
 
-  // Create an array of formatted results for the list WITH Markdown formatting
-  const markdownResultItems = results.map((r) => {
+  // Create an array of formatted results for both markdown and plaintext output
+  // using strong tags instead of ** because the latter gets printed as a literal
+  const resultItems = results.map((r) => {
     if (r.skipped) {
-      return `<strong>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
+      return `<strong>>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
+    } else if (packageType.toLowerCase() === "container" && r.digestsSucceeded !== undefined) {
+      // For container packages, show breakdown of digests and tags
+      const digestsTotal = (r.digestsSucceeded || 0) + (r.digestsFailed || 0);
+      const tagsTotal = (r.tagsSucceeded || 0) + (r.tagsFailed || 0);
+      return `<strong>${r.package}</strong>: ${r.succeeded} versions succeeded, ${r.failed} versions failed (${r.digestsSucceeded} of ${digestsTotal} digests, ${r.tagsSucceeded} of ${tagsTotal} tags)`;
     } else {
       return `<strong>${r.package}</strong>: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
     }
   });
 
-  // Add the list to the summary
-  lib_core.summary.addList(markdownResultItems);
+  // Add the list to the summary (GitHub will render the markdown)
+  lib_core.summary.addList(resultItems);
 
   // Write the summary to the output
   lib_core.summary.write();
 
-  // Create plain text results WITHOUT Markdown formatting
-  const plainTextResultItems = results.map((r) => {
-    if (r.skipped) {
-      return `${r.package}: SKIPPED (${r.reason || "No reason provided"})`;
-    } else {
-      return `${r.package}: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
-    }
-  });
-
-  // Build text summary by joining the plain text result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join("\n");
+  // Build text summary by joining the result items with newlines
+  // Markdown is still readable as plain text
+  const textSummary = "Migration completed. Summary:\n" + resultItems.join("\n");
 
   // Return the text summary for console output and action outputs
   return textSummary;
@@ -59083,6 +59094,7 @@ function formatPackageName(packageName, org, packageType) {
 
 
 
+const SKOPEO_RETRIES = 3;
 /**
  * Get registry URL based on API URL or use custom registry URL if provided
  * @param {string} apiUrl - GitHub API URL (e.g., https://api.github.com)
@@ -59192,7 +59204,7 @@ async function migrateImageReference(packageName, reference, context, isDigest) 
     core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
 
     // Build and execute Skopeo command
-    const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
+    const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds --retry-times ${SKOPEO_RETRIES} USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
     executeSkopeoCommand(skopeoCommand);
 
@@ -59307,6 +59319,8 @@ async function migratePackage(pkg, context) {
       digestsFailed: 0,
       tagsSucceeded: 0,
       tagsFailed: 0,
+      succeeded: 0, // Standard property for shared utilities
+      failed: 0, // Standard property for shared utilities
       skipped: true,
       reason: "No versions found",
     };
@@ -59318,12 +59332,18 @@ async function migratePackage(pkg, context) {
   // Then copy all image tags
   const tagResults = await migrateTags(packageName, versions, context);
 
+  // Calculate total success and failure counts
+  const totalSucceeded = digestResults.successCount + tagResults.successCount;
+  const totalFailed = digestResults.failureCount + tagResults.failureCount;
+
   return {
     package: packageName,
     digestsSucceeded: digestResults.successCount,
     digestsFailed: digestResults.failureCount,
     tagsSucceeded: tagResults.successCount,
     tagsFailed: tagResults.failureCount,
+    succeeded: totalSucceeded, // Standard property for shared utilities
+    failed: totalFailed, // Standard property for shared utilities
   };
 }
 

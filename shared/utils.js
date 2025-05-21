@@ -194,17 +194,30 @@ export function outputResults(results, packageType) {
     packages: results.length,
     success: results.reduce((acc, r) => acc + (r.succeeded || 0), 0),
     failed: results.reduce((acc, r) => acc + (r.failed || 0), 0),
-    skipped: results.filter((r) => r.skipped).length
+    skipped: results.filter((r) => r.skipped).length,
   };
-
-  // Generate both GitHub markdown summary and plain text summary
-  const summary = generateActionSummary(results, packageType, totals);
 
   // Log summary to console
   core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
   core.info(`Total packages processed: ${totals.packages}`);
   core.info(`Successful version migrations: ${totals.success}`);
   core.info(`Failed version migrations: ${totals.failed}`);
+
+  // For container packages, also calculate digest and tag totals
+  if (packageType.toLowerCase() === "container") {
+    totals.digestsSucceeded = results.reduce((acc, r) => acc + (r.digestsSucceeded || 0), 0);
+    totals.digestsFailed = results.reduce((acc, r) => acc + (r.digestsFailed || 0), 0);
+    totals.tagsSucceeded = results.reduce((acc, r) => acc + (r.tagsSucceeded || 0), 0);
+    totals.tagsFailed = results.reduce((acc, r) => acc + (r.tagsFailed || 0), 0);
+    core.info(`Successful digest migrations: ${totals.digestsSucceeded}`);
+    core.info(`Failed digest migrations: ${totals.digestsFailed}`);
+    core.info(`Successful tag migrations: ${totals.tagsSucceeded}`);
+    core.info(`Failed tag migrations: ${totals.tagsFailed}`);
+  }
+
+  // Generate both GitHub markdown summary and plain text summary
+  const summary = generateActionSummary(results, packageType, totals);
+
   if (totals.skipped > 0) {
     core.info(`Skipped packages: ${totals.skipped}`);
   }
@@ -254,32 +267,30 @@ function generateActionSummary(results, packageType, totals) {
   // Add results list with core.summary.addList
   core.summary.addHeading("Per-Package Results:", 3);
 
-  // Create an array of formatted results for the list WITH Markdown formatting
-  const markdownResultItems = results.map((r) => {
+  // Create an array of formatted results for both markdown and plaintext output
+  // using strong tags instead of ** because the latter gets printed as a literal
+  const resultItems = results.map((r) => {
     if (r.skipped) {
-      return `<strong>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
+      return `<strong>>${r.package}</strong>: SKIPPED (${r.reason || "No reason provided"})`;
+    } else if (packageType.toLowerCase() === "container" && r.digestsSucceeded !== undefined) {
+      // For container packages, show breakdown of digests and tags
+      const digestsTotal = (r.digestsSucceeded || 0) + (r.digestsFailed || 0);
+      const tagsTotal = (r.tagsSucceeded || 0) + (r.tagsFailed || 0);
+      return `<strong>${r.package}</strong>: ${r.succeeded} versions succeeded, ${r.failed} versions failed (${r.digestsSucceeded} of ${digestsTotal} digests, ${r.tagsSucceeded} of ${tagsTotal} tags)`;
     } else {
       return `<strong>${r.package}</strong>: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
     }
   });
 
-  // Add the list to the summary
-  core.summary.addList(markdownResultItems);
+  // Add the list to the summary (GitHub will render the markdown)
+  core.summary.addList(resultItems);
 
   // Write the summary to the output
   core.summary.write();
 
-  // Create plain text results WITHOUT Markdown formatting
-  const plainTextResultItems = results.map((r) => {
-    if (r.skipped) {
-      return `${r.package}: SKIPPED (${r.reason || "No reason provided"})`;
-    } else {
-      return `${r.package}: ${r.succeeded} versions succeeded, ${r.failed} versions failed`;
-    }
-  });
-
-  // Build text summary by joining the plain text result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join("\n");
+  // Build text summary by joining the result items with newlines
+  // Markdown is still readable as plain text
+  const textSummary = "Migration completed. Summary:\n" + resultItems.join("\n");
 
   // Return the text summary for console output and action outputs
   return textSummary;
