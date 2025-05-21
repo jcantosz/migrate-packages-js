@@ -70826,22 +70826,24 @@ function cleanupTempDir(dirPath) {
  * Output results to GitHub Actions
  */
 function outputResults(results, packageType) {
-  // Calculate totals
-  const totalPackages = results.length;
-  const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
-  const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
-  const totalSkipped = results.filter((r) => r.skipped).length;
+  // Calculate totals once
+  const totals = {
+    packages: results.length,
+    success: results.reduce((acc, r) => acc + (r.succeeded || 0), 0),
+    failed: results.reduce((acc, r) => acc + (r.failed || 0), 0),
+    skipped: results.filter((r) => r.skipped).length
+  };
 
   // Generate both GitHub markdown summary and plain text summary
-  const summary = generateActionSummary(results, packageType);
+  const summary = generateActionSummary(results, packageType, totals);
 
   // Log summary to console
   lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
-  lib_core.info(`Total packages processed: ${totalPackages}`);
-  lib_core.info(`Successful version migrations: ${totalSuccess}`);
-  lib_core.info(`Failed version migrations: ${totalFailed}`);
-  if (totalSkipped > 0) {
-    lib_core.info(`Skipped packages: ${totalSkipped}`);
+  lib_core.info(`Total packages processed: ${totals.packages}`);
+  lib_core.info(`Successful version migrations: ${totals.success}`);
+  lib_core.info(`Failed version migrations: ${totals.failed}`);
+  if (totals.skipped > 0) {
+    lib_core.info(`Skipped packages: ${totals.skipped}`);
   }
   lib_core.info(summary);
 
@@ -70850,9 +70852,9 @@ function outputResults(results, packageType) {
   lib_core.setOutput("result-summary", summary);
 
   // Set job status based on results
-  if (totalFailed > 0 && totalSuccess === 0) {
+  if (totals.failed > 0 && totals.success === 0) {
     lib_core.setFailed(`All ${packageType} package migrations failed`);
-  } else if (totalFailed > 0) {
+  } else if (totals.failed > 0) {
     lib_core.warning(`Some ${packageType} package migrations failed`);
   }
 }
@@ -70861,15 +70863,10 @@ function outputResults(results, packageType) {
  * Generate a GitHub Actions summary using core.summary and return the text summary
  * @param {Array} results - Migration results
  * @param {string} packageType - Type of package (npm, nuget, container)
+ * @param {Object} totals - Pre-calculated totals
  * @returns {string} - Text summary for console output and action outputs
  */
-function generateActionSummary(results, packageType) {
-  // Calculate totals
-  const totalPackages = results.length;
-  const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
-  const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
-  const totalSkipped = results.filter((r) => r.skipped).length;
-
+function generateActionSummary(results, packageType, totals) {
   // Start building the GitHub summary
   lib_core.summary.addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
     .addRaw("Migration completed.")
@@ -70882,10 +70879,10 @@ function generateActionSummary(results, packageType) {
         { data: "Statistics", header: true },
         { data: "Count", header: true },
       ],
-      ["Total Packages", totalPackages.toString()],
-      ["Versions Succeeded", totalSuccess.toString()],
-      ["Versions Failed", totalFailed.toString()],
-      ["Packages Skipped", totalSkipped.toString()],
+      ["Total Packages", totals.packages.toString()],
+      ["Versions Succeeded", totals.success.toString()],
+      ["Versions Failed", totals.failed.toString()],
+      ["Packages Skipped", totals.skipped.toString()],
     ])
     .addBreak();
 
@@ -71236,8 +71233,8 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
     core.warning(`No versions found for package ${packageName}`);
     return {
       package: packageName,
-      versionsSucceeded: 0,
-      versionsFailed: 0,
+      succeeded: 0,
+      failed: 0,
       skipped: true,
       reason: "No versions found",
     };
@@ -71255,8 +71252,8 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
 
   return {
     package: packageName,
-    versionsSucceeded: successCount,
-    versionsFailed: failureCount,
+    succeeded: successCount,
+    failed: failureCount,
   };
 }
 

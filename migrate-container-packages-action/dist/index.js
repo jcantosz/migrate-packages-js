@@ -54772,7 +54772,7 @@ var __webpack_exports__ = {};
 (() => {
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var lib_core = __nccwpck_require__(4097);
+var core = __nccwpck_require__(4097);
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __nccwpck_require__(7147);
 // EXTERNAL MODULE: external "path"
@@ -54780,7 +54780,7 @@ var external_path_ = __nccwpck_require__(1017);
 // EXTERNAL MODULE: external "child_process"
 var external_child_process_ = __nccwpck_require__(2081);
 // EXTERNAL MODULE: ../node_modules/@actions/core/lib/core.js
-var core_lib_core = __nccwpck_require__(2341);
+var lib_core = __nccwpck_require__(2341);
 ;// CONCATENATED MODULE: ../node_modules/universal-user-agent/index.js
 function getUserAgent() {
   if (typeof navigator === "object" && "userAgent" in navigator) {
@@ -58953,34 +58953,36 @@ function cleanupTempDir(dirPath) {
  * Output results to GitHub Actions
  */
 function outputResults(results, packageType) {
-  // Calculate totals
-  const totalPackages = results.length;
-  const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
-  const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
-  const totalSkipped = results.filter((r) => r.skipped).length;
+  // Calculate totals once
+  const totals = {
+    packages: results.length,
+    success: results.reduce((acc, r) => acc + (r.succeeded || 0), 0),
+    failed: results.reduce((acc, r) => acc + (r.failed || 0), 0),
+    skipped: results.filter((r) => r.skipped).length
+  };
 
   // Generate both GitHub markdown summary and plain text summary
-  const summary = generateActionSummary(results, packageType);
+  const summary = generateActionSummary(results, packageType, totals);
 
   // Log summary to console
-  core_lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
-  core_lib_core.info(`Total packages processed: ${totalPackages}`);
-  core_lib_core.info(`Successful version migrations: ${totalSuccess}`);
-  core_lib_core.info(`Failed version migrations: ${totalFailed}`);
-  if (totalSkipped > 0) {
-    core_lib_core.info(`Skipped packages: ${totalSkipped}`);
+  lib_core.info(`\n=== ${packageType.toUpperCase()} Migration Summary ===`);
+  lib_core.info(`Total packages processed: ${totals.packages}`);
+  lib_core.info(`Successful version migrations: ${totals.success}`);
+  lib_core.info(`Failed version migrations: ${totals.failed}`);
+  if (totals.skipped > 0) {
+    lib_core.info(`Skipped packages: ${totals.skipped}`);
   }
-  core_lib_core.info(summary);
+  lib_core.info(summary);
 
   // Set output
-  core_lib_core.setOutput("result", JSON.stringify(results));
-  core_lib_core.setOutput("result-summary", summary);
+  lib_core.setOutput("result", JSON.stringify(results));
+  lib_core.setOutput("result-summary", summary);
 
   // Set job status based on results
-  if (totalFailed > 0 && totalSuccess === 0) {
-    core_lib_core.setFailed(`All ${packageType} package migrations failed`);
-  } else if (totalFailed > 0) {
-    core_lib_core.warning(`Some ${packageType} package migrations failed`);
+  if (totals.failed > 0 && totals.success === 0) {
+    lib_core.setFailed(`All ${packageType} package migrations failed`);
+  } else if (totals.failed > 0) {
+    lib_core.warning(`Some ${packageType} package migrations failed`);
   }
 }
 
@@ -58988,36 +58990,31 @@ function outputResults(results, packageType) {
  * Generate a GitHub Actions summary using core.summary and return the text summary
  * @param {Array} results - Migration results
  * @param {string} packageType - Type of package (npm, nuget, container)
+ * @param {Object} totals - Pre-calculated totals
  * @returns {string} - Text summary for console output and action outputs
  */
-function generateActionSummary(results, packageType) {
-  // Calculate totals
-  const totalPackages = results.length;
-  const totalSuccess = results.reduce((acc, r) => acc + r.succeeded, 0);
-  const totalFailed = results.reduce((acc, r) => acc + r.failed, 0);
-  const totalSkipped = results.filter((r) => r.skipped).length;
-
+function generateActionSummary(results, packageType, totals) {
   // Start building the GitHub summary
-  core_lib_core.summary.addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
+  lib_core.summary.addHeading(`${packageType.toUpperCase()} Package Migration`, 2)
     .addRaw("Migration completed.")
     .addBreak()
     .addBreak();
 
   // Add statistics table
-  core_lib_core.summary.addTable([
+  lib_core.summary.addTable([
       [
         { data: "Statistics", header: true },
         { data: "Count", header: true },
       ],
-      ["Total Packages", totalPackages.toString()],
-      ["Versions Succeeded", totalSuccess.toString()],
-      ["Versions Failed", totalFailed.toString()],
-      ["Packages Skipped", totalSkipped.toString()],
+      ["Total Packages", totals.packages.toString()],
+      ["Versions Succeeded", totals.success.toString()],
+      ["Versions Failed", totals.failed.toString()],
+      ["Packages Skipped", totals.skipped.toString()],
     ])
     .addBreak();
 
   // Add results list with core.summary.addList
-  core_lib_core.summary.addHeading("Per-Package Results:", 3);
+  lib_core.summary.addHeading("Per-Package Results:", 3);
 
   // Create an array of formatted results for the list WITH Markdown formatting
   const markdownResultItems = results.map((r) => {
@@ -59029,10 +59026,10 @@ function generateActionSummary(results, packageType) {
   });
 
   // Add the list to the summary
-  core_lib_core.summary.addList(markdownResultItems);
+  lib_core.summary.addList(markdownResultItems);
 
   // Write the summary to the output
-  core_lib_core.summary.write();
+  lib_core.summary.write();
 
   // Create plain text results WITHOUT Markdown formatting
   const plainTextResultItems = results.map((r) => {
@@ -59129,11 +59126,11 @@ function buildImageReference(registry, org, packageName, reference, isDigest) {
  */
 function setupSkopeo() {
   try {
-    lib_core.info("Pulling skopeo Docker image...");
+    core.info("Pulling skopeo Docker image...");
     (0,external_child_process_.execSync)("docker pull quay.io/skopeo/stable:latest", { stdio: "inherit" });
     return true;
   } catch (err) {
-    lib_core.error(`Failed to pull Skopeo image: ${err.message}`);
+    core.error(`Failed to pull Skopeo image: ${err.message}`);
     return false;
   }
 }
@@ -59192,17 +59189,17 @@ async function migrateImageReference(packageName, reference, context, isDigest) 
 
     const referenceType = isDigest ? "digest" : "tag";
     const referencePrefix = isDigest ? "@" : ":";
-    lib_core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
+    core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
 
     // Build and execute Skopeo command
     const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
     executeSkopeoCommand(skopeoCommand);
 
-    lib_core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
+    core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
     return true;
   } catch (err) {
-    lib_core.warning(`Failed to migrate ${packageName}${referencePrefix}${reference}: ${err.message}`);
+    core.warning(`Failed to migrate ${packageName}${referencePrefix}${reference}: ${err.message}`);
     return false;
   }
 }
@@ -59221,10 +59218,10 @@ async function src_fetchVersions(octokit, org, packageName) {
       package_name: packageName,
       per_page: 100,
     });
-    lib_core.info(`Found ${versions.length} versions for package ${packageName}`);
+    core.info(`Found ${versions.length} versions for package ${packageName}`);
     return versions;
   } catch (err) {
-    lib_core.warning(`Error fetching versions for container package ${packageName}: ${err.message}`);
+    core.warning(`Error fetching versions for container package ${packageName}: ${err.message}`);
     return [];
   }
 }
@@ -59240,7 +59237,7 @@ async function migrateDigests(packageName, versions, context) {
   let successCount = 0;
   let failureCount = 0;
 
-  lib_core.info(`Copying all image digests for ${packageName}`);
+  core.info(`Copying all image digests for ${packageName}`);
   for (const version of versions) {
     const digestReference = version.name; // This is the SHA/digest
 
@@ -59267,7 +59264,7 @@ async function migrateTags(packageName, versions, context) {
   let successCount = 0;
   let failureCount = 0;
 
-  lib_core.info(`Copying all image tags for ${packageName}`);
+  core.info(`Copying all image tags for ${packageName}`);
   for (const version of versions) {
     // Get all tags for this version (if any)
     const tags = version.metadata?.container?.tags || [];
@@ -59297,13 +59294,13 @@ async function migratePackage(pkg, context) {
   const packageName = pkg.name;
   const repoName = pkg.repository?.name || "unknown";
 
-  lib_core.info(`Migrating container package: ${packageName} from repo: ${repoName}`);
+  core.info(`Migrating container package: ${packageName} from repo: ${repoName}`);
 
   // Get all versions for this container package
   const versions = await src_fetchVersions(octokitSource, sourceOrg, packageName);
 
   if (versions.length === 0) {
-    lib_core.warning(`No versions found for package ${packageName}`);
+    core.warning(`No versions found for package ${packageName}`);
     return {
       package: packageName,
       digestsSucceeded: 0,
@@ -59331,73 +59328,6 @@ async function migratePackage(pkg, context) {
 }
 
 /**
- * Generate a summary using GitHub Actions core.summary and return the text summary
- * @param {Array} results - Migration results
- * @returns {string} - Text summary for console output and action outputs
- */
-function src_generateActionSummary(results) {
-  // Calculate totals
-  const totalPackages = results.length;
-  const totalDigestsSucceeded = results.reduce((acc, r) => acc + (r.digestsSucceeded || 0), 0);
-  const totalDigestsFailed = results.reduce((acc, r) => acc + (r.digestsFailed || 0), 0);
-  const totalTagsSucceeded = results.reduce((acc, r) => acc + (r.tagsSucceeded || 0), 0);
-  const totalTagsFailed = results.reduce((acc, r) => acc + (r.tagsFailed || 0), 0);
-  const totalSkipped = results.filter((r) => r.skipped).length;
-
-  // Start building the GitHub summary
-  core.summary.addHeading("Container Package Migration", 2).addRaw("Migration completed.").addBreak().addBreak();
-
-  // Add statistics table
-  core.summary
-    .addTable([
-      [
-        { data: "Statistics", header: true },
-        { data: "Count", header: true },
-      ],
-      ["Total Packages", totalPackages.toString()],
-      ["Total Digests Succeeded", totalDigestsSucceeded.toString()],
-      ["Total Digests Failed", totalDigestsFailed.toString()],
-      ["Total Tags Succeeded", totalTagsSucceeded.toString()],
-      ["Total Tags Failed", totalTagsFailed.toString()],
-      ["Packages Skipped", totalSkipped.toString()],
-    ])
-    .addBreak();
-
-  // Add results list with core.summary.addList
-  core.summary.addHeading("Per-Package Results:", 3);
-
-  // Create an array of formatted results for the list WITH Markdown formatting
-  const markdownResultItems = results.map((r) => {
-    if (r.skipped) {
-      return `**${r.package}**: SKIPPED (${r.reason || "No reason provided"})`;
-    } else {
-      return `**${r.package}**: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed`;
-    }
-  });
-
-  // Add the list to the summary
-  core.summary.addList(markdownResultItems);
-
-  // Write the summary to the output
-  core.summary.write();
-
-  // Create plain text results WITHOUT Markdown formatting
-  const plainTextResultItems = results.map((r) => {
-    if (r.skipped) {
-      return `${r.package}: SKIPPED (${r.reason || "No reason provided"})`;
-    } else {
-      return `${r.package}: ${r.digestsSucceeded} digests and ${r.tagsSucceeded} tags succeeded, ${r.digestsFailed} digests and ${r.tagsFailed} tags failed`;
-    }
-  });
-
-  // Build text summary by joining the plain text result items with newlines
-  const textSummary = "Migration completed. Summary:\n" + plainTextResultItems.join("\n");
-
-  // Return the text summary for console output and action outputs
-  return textSummary;
-}
-
-/**
  * Parse packages input from JSON
  * @param {string} packagesJson - JSON string
  * @returns {Array} - Parsed packages
@@ -59405,7 +59335,7 @@ function src_generateActionSummary(results) {
 function src_parsePackagesInput(packagesJson) {
   try {
     const packages = JSON.parse(packagesJson);
-    lib_core.info(`Found ${packages.length} container packages to migrate`);
+    core.info(`Found ${packages.length} container packages to migrate`);
     return packages;
   } catch (err) {
     throw new Error(`Invalid packages input: ${err.message}`);
@@ -59418,22 +59348,22 @@ function src_parsePackagesInput(packagesJson) {
 async function run() {
   try {
     // Get action inputs
-    const sourceOrg = lib_core.getInput("source-org", { required: true });
-    const sourceApiUrl = lib_core.getInput("source-api-url", { required: true });
-    const sourceRegistryUrl = lib_core.getInput("source-registry-url", { required: false });
-    const targetOrg = lib_core.getInput("target-org", { required: true });
-    const targetApiUrl = lib_core.getInput("target-api-url", { required: true });
-    const targetRegistryUrl = lib_core.getInput("target-registry-url", { required: false });
-    const ghSourcePat = lib_core.getInput("gh-source-pat", { required: true });
-    const ghTargetPat = lib_core.getInput("gh-target-pat", { required: true });
+    const sourceOrg = core.getInput("source-org", { required: true });
+    const sourceApiUrl = core.getInput("source-api-url", { required: true });
+    const sourceRegistryUrl = core.getInput("source-registry-url", { required: false });
+    const targetOrg = core.getInput("target-org", { required: true });
+    const targetApiUrl = core.getInput("target-api-url", { required: true });
+    const targetRegistryUrl = core.getInput("target-registry-url", { required: false });
+    const ghSourcePat = core.getInput("gh-source-pat", { required: true });
+    const ghTargetPat = core.getInput("gh-target-pat", { required: true });
 
     // Parse packages input
-    const packagesJson = lib_core.getInput("packages", { required: true });
+    const packagesJson = core.getInput("packages", { required: true });
     const packages = src_parsePackagesInput(packagesJson);
 
     if (packages.length === 0) {
-      lib_core.info("No container packages to migrate");
-      lib_core.setOutput("result", JSON.stringify([]));
+      core.info("No container packages to migrate");
+      core.setOutput("result", JSON.stringify([]));
       return;
     }
 
@@ -59469,7 +59399,7 @@ async function run() {
     // Output results using the shared utility function
     outputResults(results, "container");
   } catch (error) {
-    lib_core.setFailed(`Action failed: ${error.message}`);
+    core.setFailed(`Action failed: ${error.message}`);
   }
 }
 

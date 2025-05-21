@@ -6,7 +6,13 @@ import { execSync, spawnSync } from "child_process";
 import os from "os";
 import axios from "axios";
 import AdmZip from "adm-zip";
-import { getCommonInputs, createOctokitClient, getNuGetRegistryUrl, getBaseHostname, outputResults } from "../../shared/utils.js";
+import {
+  getCommonInputs,
+  createOctokitClient,
+  getNuGetRegistryUrl,
+  getBaseHostname,
+  outputResults,
+} from "../../shared/utils.js";
 
 /**
  * Sets up the environment for NuGet package migration
@@ -282,8 +288,8 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
     core.warning(`No versions found for package ${packageName}`);
     return {
       package: packageName,
-      versionsSucceeded: 0,
-      versionsFailed: 0,
+      succeeded: 0,
+      failed: 0,
       skipped: true,
       reason: "No versions found",
     };
@@ -301,8 +307,8 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
 
   return {
     package: packageName,
-    versionsSucceeded: successCount,
-    versionsFailed: failureCount,
+    succeeded: successCount,
+    failed: failureCount,
   };
 }
 
