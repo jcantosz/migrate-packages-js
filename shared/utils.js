@@ -3,10 +3,30 @@ import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
 import pRetry from "p-retry";
+import * as errors from "./errors.js";
 
 /**
  * Shared utilities for package migration actions
  */
+
+// Enhanced retry configuration
+const DEFAULT_RETRY_CONFIG = {
+  retries: 3,
+  minTimeout: 1000,
+  maxTimeout: 10000,
+  factor: 2,
+  retryableErrors: [
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "EPIPE",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "ETIMEDOUT",
+    "ENOTFOUND",
+    "EADDRNOTAVAIL",
+  ],
+};
 
 /**
  * Get common inputs from GitHub Actions core
@@ -37,30 +57,48 @@ export function getCommonInputs(core) {
  * Retry an operation with exponential backoff using p-retry
  * @param {Function} operation - Async function to retry
  * @param {Object} options - Retry options
- * @param {number} options.retries - Maximum number of retries (default: 3)
- * @param {number} options.minTimeout - Minimum timeout between retries in ms (default: 1000)
- * @param {number} options.maxTimeout - Maximum timeout between retries in ms (default: 10000)
- * @param {Function} options.onRetry - Function called on retry with error and attempt count
  * @returns {Promise<any>} - Result of the operation
  */
 export async function withRetry(operation, options = {}) {
-  const {
-    retries = 3,
-    minTimeout = 1000,
-    maxTimeout = 10000,
-    onRetry = (error, attempt) => core.info(`Retry attempt ${attempt} after error: ${error.message}`),
-  } = options;
+  const config = { ...DEFAULT_RETRY_CONFIG, ...options };
 
-  return pRetry(operation, {
-    retries,
-    minTimeout,
-    maxTimeout,
-    onFailedAttempt: (error) => {
-      const attempt = error.attemptNumber;
-      onRetry(error, attempt);
-      core.info(`Attempt ${attempt} failed. ${error.retriesLeft} retries left.`);
+  return pRetry(
+    async () => {
+      try {
+        return await operation();
+      } catch (error) {
+        // Don't retry authentication or not found errors
+        if (error instanceof errors.AuthenticationError || error instanceof errors.PackageNotFoundError) {
+          throw new pRetry.AbortError(error.message);
+        }
+        throw error;
+      }
     },
-  });
+    {
+      ...config,
+      onFailedAttempt: (error) => {
+        const attempt = error.attemptNumber;
+        if (config.onRetry) {
+          config.onRetry(error, attempt);
+        }
+        core.info(`Attempt ${attempt} failed. ${error.retriesLeft} retries left.`);
+
+        // Log detailed error information
+        core.debug(
+          `Error details: ${JSON.stringify(
+            {
+              name: error.name,
+              code: error.code,
+              statusCode: error.statusCode,
+              message: error.message,
+            },
+            null,
+            2
+          )}`
+        );
+      },
+    }
+  );
 }
 
 /**
@@ -151,6 +189,33 @@ export function getNuGetRegistryUrl(apiUrl, customRegistryUrl) {
 }
 
 /**
+ * Get registry URL for any package type based on API URL or use custom registry URL
+ * @param {string} packageType - Type of package (npm, nuget, container)
+ * @param {string} apiUrl - GitHub API URL
+ * @param {string|null} customRegistryUrl - Custom registry URL if provided
+ * @returns {string} - Registry URL
+ */
+export function getRegistryUrl(packageType, apiUrl, customRegistryUrl) {
+  if (customRegistryUrl) return customRegistryUrl;
+
+  switch (packageType.toLowerCase()) {
+    case "npm":
+      return getNpmRegistryUrl(apiUrl);
+    case "nuget":
+      return getNuGetRegistryUrl(apiUrl);
+    case "container":
+      const hostname = new URL(apiUrl).hostname;
+      if (hostname === "api.github.com") {
+        return "ghcr.io";
+      }
+      const baseDomain = getBaseHostname(apiUrl);
+      return `containers.${baseDomain}`;
+    default:
+      throw new Error(`Unsupported package type: ${packageType}`);
+  }
+}
+
+/**
  * Extract the base hostname from an API URL
  * @param {string} apiUrl - The API URL to extract the hostname from
  * @returns {string} - The base hostname without any "api." prefix
@@ -168,39 +233,74 @@ export function getBaseHostname(apiUrl) {
 }
 
 /**
+ * Fetch package versions for any package type
+ * @param {Object} octokitClient - Authenticated Octokit instance
+ * @param {string} org - Organization name
+ * @param {string} packageName - Package name
+ * @param {string} packageType - Type of package (npm, nuget, container)
+ * @returns {Array} - List of versions
+ */
+export async function fetchPackageVersions(octokitClient, org, packageName, packageType) {
+  try {
+    // Build the API path directly using the packageType
+    const apiPath = `GET /orgs/{org}/packages/${packageType.toLowerCase()}/{package_name}/versions`;
+
+    const versions = await octokitClient.paginate(apiPath, {
+      org,
+      package_name: packageName,
+      per_page: 100,
+    });
+
+    core.info(`Found ${versions.length} versions for package ${packageName}`);
+    return versions;
+  } catch (err) {
+    core.warning(`Error fetching versions for ${packageType} package ${packageName}: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Create a standardized package result object
+ * @param {string} packageName - Name of the package
+ * @param {number} succeeded - Count of successfully migrated versions
+ * @param {number} failed - Count of failed migrations
+ * @param {Object} options - Additional result options
+ * @returns {Object} - Standardized result object
+ */
+export function createPackageResult(packageName, succeeded = 0, failed = 0, options = {}) {
+  const result = {
+    package: packageName,
+    succeeded,
+    failed,
+  };
+
+  // Add skipped status if specified
+  if (options.skipped) {
+    result.skipped = true;
+    result.reason = options.reason || "No versions found";
+  }
+
+  // Add container-specific properties if provided
+  if (options.digestsSucceeded !== undefined) {
+    result.digestsSucceeded = options.digestsSucceeded;
+    result.digestsFailed = options.digestsFailed || 0;
+  }
+
+  if (options.tagsSucceeded !== undefined) {
+    result.tagsSucceeded = options.tagsSucceeded;
+    result.tagsFailed = options.tagsFailed || 0;
+  }
+
+  return result;
+}
+
+/**
  * Fetch all versions for a package
  */
 export async function fetchVersions(octokitClient, org, packageName, packageType) {
   try {
-    // Different package types have different version fetching logic
-    switch (packageType.toLowerCase()) {
-      case "npm":
-        const npmResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: "npm",
-          package_name: packageName,
-          org: org,
-        });
-        return npmResult.data;
-
-      case "nuget":
-        const nugetResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: "nuget",
-          package_name: packageName,
-          org: org,
-        });
-        return nugetResult.data;
-
-      case "container":
-        const containerResult = await octokitClient.packages.getAllPackageVersionsForPackageOwnedByOrg({
-          package_type: "container",
-          package_name: packageName,
-          org: org,
-        });
-        return containerResult.data;
-
-      default:
-        throw new Error(`Unsupported package type: ${packageType}`);
-    }
+    // Use the new unified version fetching function
+    return await fetchPackageVersions(octokitClient, org, packageName, packageType);
   } catch (error) {
     console.error(`Error fetching versions for ${packageName}: ${error.message}`);
     return [];
@@ -208,12 +308,53 @@ export async function fetchVersions(octokitClient, org, packageName, packageType
 }
 
 /**
+ * Resource tracking for temporary files and directories
+ */
+const resources = new Set();
+
+// Set up cleanup handlers
+process.on("exit", () => cleanupAllResources());
+process.on("SIGINT", () => {
+  cleanupAllResources();
+  process.exit(1);
+});
+process.on("SIGTERM", () => {
+  cleanupAllResources();
+  process.exit(1);
+});
+
+/**
+ * Track a resource for cleanup
+ */
+export function trackResource(resource) {
+  resources.add(resource);
+  return resource; // Return for easy chaining
+}
+
+/**
+ * Clean up a resource and remove it from tracking
+ */
+export function cleanupResource(resource) {
+  if (fs.existsSync(resource)) {
+    fs.rmSync(resource, { recursive: true, force: true });
+  }
+  resources.delete(resource);
+}
+
+/**
+ * Clean up all tracked resources
+ */
+export function cleanupAllResources() {
+  for (const resource of resources) {
+    cleanupResource(resource);
+  }
+}
+
+/**
  * Clean up a temporary directory
  */
 export function cleanupTempDir(dirPath) {
-  if (fs.existsSync(dirPath)) {
-    fs.rmSync(dirPath, { recursive: true, force: true });
-  }
+  cleanupResource(dirPath);
 }
 
 /**
@@ -331,11 +472,15 @@ function generateActionSummary(results, packageType, totals) {
  * Create a temporary directory for processing
  */
 export function createTempDir(basePath = process.cwd()) {
-  const tempDir = path.join(basePath, "temp");
+  const tempDir = path.join(basePath, `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   if (fs.existsSync(tempDir)) {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
   fs.mkdirSync(tempDir, { recursive: true });
+
+  // Track the temporary directory
+  trackResource(tempDir);
+
   return tempDir;
 }
 
@@ -353,4 +498,67 @@ export function formatPackageName(packageName, org, packageType) {
     default:
       return packageName;
   }
+}
+
+/**
+ * Common function for migrating packages with a given migration strategy
+ * @param {Array} packages - List of packages to migrate
+ * @param {Object} context - Migration context with all necessary configuration
+ * @param {Function} migratePackageFn - The package-specific migration function
+ * @param {string} packageType - Type of packages (npm, nuget, container)
+ * @returns {Array} - Migration results
+ */
+export async function migratePackagesWithContext(packages, context, migratePackageFn, packageType) {
+  try {
+    if (packages.length === 0) {
+      core.info(`No ${packageType} packages to migrate`);
+      core.setOutput("result", JSON.stringify([]));
+      return [];
+    }
+
+    // Migrate all packages with the provided strategy
+    const results = [];
+    for (const pkg of packages) {
+      const result = await migratePackageFn(pkg, context);
+      results.push(result);
+    }
+
+    // Output results using the shared utility
+    outputResults(results, packageType);
+
+    return results;
+  } catch (error) {
+    core.setFailed(`Migration failed: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Setup a complete migration context with common inputs, Octokit client, and registry URLs
+ * @param {Object} core - GitHub Actions core
+ * @param {string} packageType - Type of package (npm, nuget, container)
+ * @param {Object} additionalInputs - Additional inputs to include in the context
+ * @returns {Object} - Complete context object for migration
+ */
+export function setupContext(core, packageType, additionalInputs = {}) {
+  // Get common inputs first
+  const commonInputs = getCommonInputs(core);
+
+  // Create Octokit client
+  const octokitSource = createOctokitClient(commonInputs.ghSourcePat, commonInputs.sourceApiUrl);
+
+  // Determine registry URLs for source and target
+  const sourceRegistryUrl = getRegistryUrl(packageType, commonInputs.sourceApiUrl, commonInputs.sourceRegistryUrl);
+
+  const targetRegistryUrl = getRegistryUrl(packageType, commonInputs.targetApiUrl, commonInputs.targetRegistryUrl);
+
+  // Create and return the complete context object
+  return {
+    ...commonInputs,
+    octokitSource,
+    sourceRegistryUrl,
+    targetRegistryUrl,
+    packageType,
+    ...additionalInputs,
+  };
 }

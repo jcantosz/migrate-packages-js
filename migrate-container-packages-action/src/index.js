@@ -1,50 +1,25 @@
 import * as core from "@actions/core";
-import { Octokit } from "@octokit/rest";
-import fs from "fs";
-import path from "path";
 import { execSync } from "child_process";
-import { getBaseHostname, createOctokitClient, outputResults, withRetry } from "../../shared/utils.js";
-
-/**
- * Get registry URL based on API URL or use custom registry URL if provided
- * @param {string} apiUrl - GitHub API URL (e.g., https://api.github.com)
- * @param {string|null} customRegistryUrl - Custom registry URL if provided
- * @returns {string} - Registry URL
- */
-function getRegistryUrl(apiUrl, customRegistryUrl) {
-  if (customRegistryUrl) {
-    return customRegistryUrl;
-  }
-
-  const hostname = new URL(apiUrl).hostname;
-
-  // Handle github.com case
-  if (hostname === "api.github.com") {
-    return "ghcr.io";
-  }
-
-  // Use the shared utility function to get the base hostname
-  const baseDomain = getBaseHostname(apiUrl);
-  return `containers.${baseDomain}`;
-}
+import {
+  withRetry,
+  parsePackagesInput,
+  fetchPackageVersions,
+  createPackageResult,
+  getRegistryUrl,
+  migratePackagesWithContext,
+  setupContext,
+} from "../../shared/utils.js";
 
 /**
  * Build full image reference
- * @param {string} registry - Registry URL
- * @param {string} org - Organization name
- * @param {string} packageName - Package name
- * @param {string} reference - Tag or digest reference
- * @param {boolean} isDigest - Whether reference is a digest or tag
- * @returns {string} - Full image reference
  */
 function buildImageReference(registry, org, packageName, reference, isDigest) {
-  const referencePrefix = isDigest ? "@" : ":";
-  return `docker://${registry}/${org}/${packageName}${referencePrefix}${reference}`;
+  const separator = isDigest ? "@" : ":";
+  return `${registry}/${org}/${packageName}${separator}${reference}`;
 }
 
 /**
  * Setup Skopeo by pulling Docker image
- * @returns {boolean} - True if setup was successful
  */
 function setupSkopeo() {
   try {
@@ -52,72 +27,93 @@ function setupSkopeo() {
     execSync("docker pull quay.io/skopeo/stable:latest", { stdio: "inherit" });
     return true;
   } catch (err) {
-    core.error(`Failed to pull Skopeo image: ${err.message}`);
-    return false;
+    core.error("Failed to pull Skopeo image");
+    throw err;
   }
 }
 
 /**
  * Check Docker installation
- * @throws {Error} If Docker is not installed
  */
 function checkDockerInstallation() {
   try {
     execSync("docker --version", { stdio: "pipe" });
   } catch (err) {
-    throw new Error(
-      "Docker is not installed or not accessible. Docker is required for container migration with Skopeo."
-    );
+    core.error("Docker is not installed or not accessible");
+    throw err;
   }
+}
+
+// Helper functions to reduce repetition and nesting
+function logError(message, packageName, reference) {
+  core.error(`${message} for ${packageName}:${reference}`);
+}
+
+function logWarning(message, packageName, reference) {
+  core.warning(`${message} for ${packageName}:${reference}`);
+}
+
+function buildSkipResult(packageName) {
+  return createPackageResult(packageName, 0, 0, {
+    skipped: true,
+    reason: "No versions found",
+    digestsSucceeded: 0,
+    digestsFailed: 0,
+    tagsSucceeded: 0,
+    tagsFailed: 0,
+  });
 }
 
 /**
  * Execute Skopeo command via Docker
- * @param {string} skopeoCommand - Skopeo command to execute
  */
-function executeSkopeoCommand(skopeoCommand) {
+function executeSkopeoCommand(skopeoCommand, packageName, reference) {
   const dockerCommand = `docker run -i --entrypoint /bin/bash quay.io/skopeo/stable:latest -c "${skopeoCommand}"`;
-  execSync(dockerCommand, { stdio: "inherit" });
-}
 
-/**
- * Migrate a single container image reference (tag or digest)
- * @param {string} packageName - Name of the package
- * @param {string} reference - Tag or SHA reference
- * @param {object} context - Migration context
- * @param {boolean} isDigest - Whether the reference is a digest (SHA) or tag
- * @returns {boolean} - Success status
- */
-async function migrateImageReference(packageName, reference, context, isDigest) {
-  const referenceType = isDigest ? "digest" : "tag";
-  const referencePrefix = isDigest ? "@" : ":";
-
-  // Use the withRetry function from shared utils with p-retry
   try {
-    return await withRetry(() => performImageMigration(packageName, reference, context, isDigest), {
-      onRetry: (error, attempt) => {
-        core.info(
-          `Retry attempt ${attempt} for ${packageName}${referencePrefix}${reference} after error: ${error.message}`
-        );
-      },
-    });
+    execSync(dockerCommand, { stdio: "inherit" });
+    return true;
   } catch (err) {
-    core.warning(
-      `Failed to migrate ${packageName}${referencePrefix}${reference} after multiple attempts: ${err.message}`
-    );
+    const errorMsg = err.message.toLowerCase();
+    if (errorMsg.includes("unauthorized")) {
+      logError("Failed to authenticate with registry", packageName, reference);
+    } else if (errorMsg.includes("not found")) {
+      logWarning("Image not found", packageName, reference);
+    } else {
+      logError(`Skopeo command failed: ${err.message}`, packageName, reference);
+    }
     return false;
   }
 }
 
 /**
- * Performs the actual image migration operation
- * @param {string} packageName - Name of the package
- * @param {string} reference - Tag or SHA reference
- * @param {object} context - Migration context
- * @param {boolean} isDigest - Whether the reference is a digest (SHA) or tag
- * @returns {boolean} - Success status
+ * Parse versions into tags and digests
  */
-async function performImageMigration(packageName, reference, context, isDigest) {
+function parseVersions(versions) {
+  const references = [];
+
+  for (const version of versions) {
+    references.push({
+      reference: version.name,
+      isDigest: true,
+    });
+
+    const tags = version.metadata?.container?.tags || [];
+    references.push(
+      ...tags.map((tag) => ({
+        reference: tag,
+        isDigest: false,
+      }))
+    );
+  }
+
+  return references;
+}
+
+/**
+ * Performs the actual image migration operation
+ */
+function performImageMigration(packageName, reference, context, isDigest) {
   const {
     sourceOrg,
     sourceApiUrl,
@@ -129,112 +125,72 @@ async function performImageMigration(packageName, reference, context, isDigest) 
     ghTargetPat,
   } = context;
 
-  const referenceType = isDigest ? "digest" : "tag";
-  const referencePrefix = isDigest ? "@" : ":";
+  const sourceRegistry = getRegistryUrl("container", sourceApiUrl, sourceRegistryUrl);
+  const targetRegistry = getRegistryUrl("container", targetApiUrl, targetRegistryUrl);
 
-  // Determine registries and build image references
-  const sourceRegistry = getRegistryUrl(sourceApiUrl, sourceRegistryUrl);
-  const targetRegistry = getRegistryUrl(targetApiUrl, targetRegistryUrl);
-
-  // Build source and target image references
   const sourceImage = buildImageReference(sourceRegistry, sourceOrg, packageName, reference, isDigest);
   const targetImage = buildImageReference(targetRegistry, targetOrg, packageName, reference, isDigest);
 
-  core.info(`Migrating ${packageName}${referencePrefix}${reference} (${referenceType})`);
+  const referencePrefix = isDigest ? "@" : ":";
+  core.info(`Migrating ${packageName}${referencePrefix}${reference}`);
 
-  // Build and execute Skopeo command
   const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
-  executeSkopeoCommand(skopeoCommand);
+  const success = executeSkopeoCommand(skopeoCommand, packageName, reference);
 
-  core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
-  return true;
+  if (success) {
+    core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
+  }
+
+  return success;
 }
 
 /**
- * Fetch all versions (digests/SHAs) for a container package
- * @param {Octokit} octokit - Authenticated Octokit instance
- * @param {string} org - Organization name
- * @param {string} packageName - Package name
- * @returns {Array} - List of versions
+ * Track migration results for a single reference
  */
-async function fetchVersions(octokit, org, packageName) {
-  try {
-    const versions = await octokit.paginate("GET /orgs/{org}/packages/container/{package_name}/versions", {
-      org,
-      package_name: packageName,
-      per_page: 100,
+function updateReferenceResults(results, success, isDigest) {
+  success ? results.successCount++ : results.failureCount++;
+  if (success) {
+    isDigest ? results.digestsSucceeded++ : results.tagsSucceeded++;
+  } else {
+    isDigest ? results.digestsFailed++ : results.tagsFailed++;
+  }
+}
+
+/**
+ * Migrate a container package's references (both tags and digests)
+ */
+async function migrateReferences(packageName, references, context) {
+  const results = {
+    successCount: 0,
+    failureCount: 0,
+    digestsSucceeded: 0,
+    digestsFailed: 0,
+    tagsSucceeded: 0,
+    tagsFailed: 0,
+  };
+
+  for (const { reference, isDigest } of references) {
+    const success = await withRetry(() => performImageMigration(packageName, reference, context, isDigest), {
+      onRetry: (error, attempt) => {
+        const referenceType = isDigest ? "digest" : "tag";
+        const referencePrefix = isDigest ? "@" : ":";
+
+        core.info(
+          `Retry attempt ${attempt} for ${packageName}${referencePrefix}${reference} (${referenceType}). Error: ${error.message}`
+        );
+        core.debug(`Error details: ${JSON.stringify({ isDigest, attempt }, null, 2)}`);
+      },
     });
-    core.info(`Found ${versions.length} versions for package ${packageName}`);
-    return versions;
-  } catch (err) {
-    core.warning(`Error fetching versions for container package ${packageName}: ${err.message}`);
-    return [];
-  }
-}
 
-/**
- * Migrate all digests (SHAs) for a package
- * @param {string} packageName - Package name
- * @param {Array} versions - List of versions
- * @param {Object} context - Migration context
- * @returns {Object} - Success and failure counts
- */
-async function migrateDigests(packageName, versions, context) {
-  let successCount = 0;
-  let failureCount = 0;
-
-  core.info(`Copying all image digests for ${packageName}`);
-  for (const version of versions) {
-    const digestReference = version.name; // This is the SHA/digest
-
-    // Migrate the digest
-    const success = await migrateImageReference(packageName, digestReference, context, true);
-    if (success) {
-      successCount++;
-    } else {
-      failureCount++;
-    }
+    updateReferenceResults(results, success, isDigest);
   }
 
-  return { successCount, failureCount };
-}
-
-/**
- * Migrate all tags for a package
- * @param {string} packageName - Package name
- * @param {Array} versions - List of versions
- * @param {Object} context - Migration context
- * @returns {Object} - Success and failure counts
- */
-async function migrateTags(packageName, versions, context) {
-  let successCount = 0;
-  let failureCount = 0;
-
-  core.info(`Copying all image tags for ${packageName}`);
-  for (const version of versions) {
-    // Get all tags for this version (if any)
-    const tags = version.metadata?.container?.tags || [];
-
-    for (const tag of tags) {
-      // Migrate the tag
-      const success = await migrateImageReference(packageName, tag, context, false);
-      if (success) {
-        successCount++;
-      } else {
-        failureCount++;
-      }
-    }
-  }
-
-  return { successCount, failureCount };
+  return results;
 }
 
 /**
  * Migrate a single container package with all its tags and digests
- * @param {Object} pkg - Package object
- * @param {Object} context - Migration context
- * @returns {Object} - Migration result
  */
 async function migratePackage(pkg, context) {
   const { octokitSource, sourceOrg } = context;
@@ -243,58 +199,20 @@ async function migratePackage(pkg, context) {
 
   core.info(`Migrating container package: ${packageName} from repo: ${repoName}`);
 
-  // Get all versions for this container package
-  const versions = await fetchVersions(octokitSource, sourceOrg, packageName);
-
-  if (versions.length === 0) {
-    core.warning(`No versions found for package ${packageName}`);
-    return {
-      package: packageName,
-      digestsSucceeded: 0,
-      digestsFailed: 0,
-      tagsSucceeded: 0,
-      tagsFailed: 0,
-      succeeded: 0, // Standard property for shared utilities
-      failed: 0, // Standard property for shared utilities
-      skipped: true,
-      reason: "No versions found",
-    };
+  const versions = await fetchPackageVersions(octokitSource, sourceOrg, packageName, "container");
+  if (!versions.length) {
+    return buildSkipResult(packageName);
   }
 
-  // First copy all image digests (SHAs)
-  const digestResults = await migrateDigests(packageName, versions, context);
+  const references = parseVersions(versions);
+  const results = await migrateReferences(packageName, references, context);
 
-  // Then copy all image tags
-  const tagResults = await migrateTags(packageName, versions, context);
-
-  // Calculate total success and failure counts
-  const totalSucceeded = digestResults.successCount + tagResults.successCount;
-  const totalFailed = digestResults.failureCount + tagResults.failureCount;
-
-  return {
-    package: packageName,
-    digestsSucceeded: digestResults.successCount,
-    digestsFailed: digestResults.failureCount,
-    tagsSucceeded: tagResults.successCount,
-    tagsFailed: tagResults.failureCount,
-    succeeded: totalSucceeded, // Standard property for shared utilities
-    failed: totalFailed, // Standard property for shared utilities
-  };
-}
-
-/**
- * Parse packages input from JSON
- * @param {string} packagesJson - JSON string
- * @returns {Array} - Parsed packages
- */
-function parsePackagesInput(packagesJson) {
-  try {
-    const packages = JSON.parse(packagesJson);
-    core.info(`Found ${packages.length} container packages to migrate`);
-    return packages;
-  } catch (err) {
-    throw new Error(`Invalid packages input: ${err.message}`);
-  }
+  return createPackageResult(packageName, results.successCount, results.failureCount, {
+    digestsSucceeded: results.digestsSucceeded,
+    digestsFailed: results.digestsFailed,
+    tagsSucceeded: results.tagsSucceeded,
+    tagsFailed: results.tagsFailed,
+  });
 }
 
 /**
@@ -302,57 +220,22 @@ function parsePackagesInput(packagesJson) {
  */
 async function run() {
   try {
-    // Get action inputs
-    const sourceOrg = core.getInput("source-org", { required: true });
-    const sourceApiUrl = core.getInput("source-api-url", { required: true });
-    const sourceRegistryUrl = core.getInput("source-registry-url", { required: false });
-    const targetOrg = core.getInput("target-org", { required: true });
-    const targetApiUrl = core.getInput("target-api-url", { required: true });
-    const targetRegistryUrl = core.getInput("target-registry-url", { required: false });
-    const ghSourcePat = core.getInput("gh-source-pat", { required: true });
-    const ghTargetPat = core.getInput("gh-target-pat", { required: true });
-
-    // Parse packages input
     const packagesJson = core.getInput("packages", { required: true });
-    const packages = parsePackagesInput(packagesJson);
+    const packages = parsePackagesInput(packagesJson, "container");
 
-    if (packages.length === 0) {
+    if (!packages.length) {
       core.info("No container packages to migrate");
       core.setOutput("result", JSON.stringify([]));
       return;
     }
 
-    // Check prerequisites
     checkDockerInstallation();
     if (!setupSkopeo()) {
       throw new Error("Failed to set up Skopeo. Migration cannot continue.");
     }
 
-    // Set up Octokit client using the shared utility function
-    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
-
-    // Prepare context with all configuration
-    const context = {
-      octokitSource,
-      sourceOrg,
-      sourceApiUrl,
-      sourceRegistryUrl,
-      targetOrg,
-      targetApiUrl,
-      targetRegistryUrl,
-      ghSourcePat,
-      ghTargetPat,
-    };
-
-    // Migrate all packages
-    const results = [];
-    for (const pkg of packages) {
-      const result = await migratePackage(pkg, context);
-      results.push(result);
-    }
-
-    // Output results using the shared utility function
-    outputResults(results, "container");
+    const context = setupContext(core, "container");
+    await migratePackagesWithContext(packages, context, migratePackage, "container");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
   }

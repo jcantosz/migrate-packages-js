@@ -8,247 +8,299 @@ import {
   getCommonInputs,
   parsePackagesInput,
   createOctokitClient,
-  fetchVersions,
   cleanupTempDir,
   outputResults,
-  getNpmRegistryUrl,
   getBaseHostname,
   withRetry,
+  createTempDir,
+  fetchPackageVersions,
+  createPackageResult,
+  getRegistryUrl,
+  migratePackagesWithContext,
+  setupContext,
+  trackResource,
 } from "../../shared/utils.js";
+import * as errors from "../../shared/errors.js";
 
-/**
- * Write .npmrc for target registry and return its path
- */
-function writeNpmrc(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
-  const npmrcPath = path.join(tempDir, ".npmrc");
-  fs.writeFileSync(
-    npmrcPath,
-    `@${targetOrg}:registry=${targetRegistryUrl}/\n//${new URL(targetRegistryUrl).host}/:_authToken=${ghTargetPat}\n`
-  );
-  return npmrcPath;
+// Helper functions to reduce nesting and make intent clear
+function logError(message, packageName, version) {
+  core.error(`${message} for ${packageName}@${version}`);
 }
 
-/**
- * Migrate a single npm package version
- */
-async function migrateVersion(packageName, versionName, context) {
-  const { tempDir } = context;
-  const versionTempDir = path.join(tempDir, `${packageName}-${versionName}`);
-
-  // Clean up any previous directory
-  if (fs.existsSync(versionTempDir)) {
-    fs.rmSync(versionTempDir, { recursive: true, force: true });
-  }
-  fs.mkdirSync(versionTempDir, { recursive: true });
-
-  // Use withRetry function from shared utils with p-retry
-  try {
-    return await withRetry(() => performNpmVersionMigration(packageName, versionName, context, versionTempDir), {
-      onRetry: (error, attempt) => {
-        core.info(`Retry attempt ${attempt} for ${packageName}@${versionName} after error: ${error.message}`);
-
-        // Clean up the version temp dir to start fresh on retry
-        cleanupTempDir(versionTempDir);
-        fs.mkdirSync(versionTempDir, { recursive: true });
-      },
-    });
-  } catch (err) {
-    core.warning(`Failed to migrate ${packageName}@${versionName} after multiple attempts: ${err.message}`);
-    cleanupTempDir(versionTempDir);
-    return false;
-  }
+function logWarning(message, packageName, version) {
+  core.warning(`${message} for ${packageName}@${version}`);
 }
 
-/**
- * Performs the actual NPM package version migration
- * @param {string} packageName - Name of the package
- * @param {string} versionName - Version to migrate
- * @param {object} context - Migration context
- * @param {string} versionTempDir - Temporary directory for this version
- * @returns {boolean} - Success status
- */
-async function performNpmVersionMigration(packageName, versionName, context, versionTempDir) {
-  const { sourceOrg, sourceRegistryUrl, ghSourcePat, npmrcPath, targetOrg, targetApiUrl, repoName } = context;
-
-  core.info(`Migrating ${packageName}@${versionName}`);
-
-  // Step 1: Get the tarball URL from the package manifest
-  const manifestUrl = `${sourceRegistryUrl}/@${sourceOrg}/${packageName}`;
-  const manifest = await axios.get(manifestUrl, {
-    headers: { Authorization: `token ${ghSourcePat}` },
+function buildSkipResult(packageName) {
+  return createPackageResult(packageName, 0, 0, {
+    skipped: true,
+    reason: "No versions found",
   });
+}
 
-  const tarballUrl = manifest.data.versions[versionName]?.dist.tarball;
-  if (!tarballUrl) {
-    core.warning(`Version ${versionName} not found for package ${packageName}`);
-    cleanupTempDir(versionTempDir);
-    return false;
+/**
+ * Configure NPM authentication for target registry
+ */
+function setupNpmAuthentication(tempDir, targetOrg, targetRegistryUrl, ghTargetPat) {
+  const npmrcPath = path.join(tempDir, ".npmrc");
+  const config = [
+    `@${targetOrg}:registry=${targetRegistryUrl}/`,
+    `//${new URL(targetRegistryUrl).host}/:_authToken=${ghTargetPat}`,
+  ].join("\n");
+
+  fs.writeFileSync(npmrcPath, config);
+  return trackResource(npmrcPath);
+}
+
+/**
+ * Fetch package manifest from source registry
+ */
+async function fetchPackageManifest(packageName, versionName, sourceRegistryUrl, sourceOrg, ghSourcePat) {
+  const manifestUrl = `${sourceRegistryUrl}/@${sourceOrg}/${packageName}`;
+
+  try {
+    const manifest = await axios.get(manifestUrl, {
+      headers: { Authorization: `token ${ghSourcePat}` },
+    });
+
+    const tarballUrl = manifest.data.versions[versionName]?.dist.tarball;
+    if (!tarballUrl) {
+      logWarning("Version not found in manifest", packageName, versionName);
+      return null;
+    }
+
+    return tarballUrl;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      logError("Failed to authenticate with source registry", packageName, versionName);
+    } else if (error.response?.status === 404) {
+      logWarning("Package manifest not found", packageName, versionName);
+    } else {
+      logError(`Failed to fetch manifest: ${error.message}`, packageName, versionName);
+    }
+    throw error;
   }
+}
 
-  // Step 2: Download the package tarball
-  const tarballPath = path.join(versionTempDir, `${packageName}-${versionName}.tgz`);
-  const tarballResp = await axios.get(tarballUrl, {
+/**
+ * Download and extract package contents
+ */
+async function downloadAndExtractPackage(tarballUrl, packageDir, ghSourcePat) {
+  const response = await axios.get(tarballUrl, {
     responseType: "arraybuffer",
     headers: { Authorization: `token ${ghSourcePat}` },
   });
-  fs.writeFileSync(tarballPath, tarballResp.data);
 
-  // Step 3: Extract the tarball
-  await tar.x({ file: tarballPath, cwd: versionTempDir });
-  const packageDir = path.join(versionTempDir, "package");
-
-  // Step 4: Update the package.json to use the target organization
-  const pkgJsonPath = path.join(packageDir, "package.json");
-  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
-  pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
-
-  // Update repository URL with either repo-name or extracted from existing URL
-  if (repoName || pkgJson.repository) {
-    // Use the shared utility function to get the base hostname
-    const targetHostname = getBaseHostname(targetApiUrl);
-
-    // Get repo name from input or extract from existing URL
-    const existingUrl = typeof pkgJson.repository === "string" ? pkgJson.repository : pkgJson.repository?.url || "";
-    const extractedName =
-      repoName ||
-      existingUrl
-        ?.split("/")
-        ?.pop()
-        ?.replace(/\.git$/, "") ||
-      null;
-
-    if (extractedName) {
-      const newRepoUrl = `git+https://${targetHostname}/${targetOrg}/${extractedName}.git`;
-      if (typeof pkgJson.repository === "string") {
-        pkgJson.repository = newRepoUrl;
-      } else {
-        pkgJson.repository = pkgJson.repository || {};
-        pkgJson.repository.type = pkgJson.repository.type || "git";
-        pkgJson.repository.url = newRepoUrl;
-      }
-      core.info(`Updated repository URL to use ${extractedName}`);
-    }
-  }
-
-  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
-
-  // Step 5: Publish the package to the target registry
-  execSync(`npm publish --userconfig ${npmrcPath}`, {
+  await tar.x({
     cwd: packageDir,
-    stdio: "inherit",
+    file: Buffer.from(response.data),
   });
-  core.info(`Published ${packageName}@${versionName} successfully`);
 
-  // Clean up after successful migration
-  cleanupTempDir(versionTempDir);
-  return true;
+  return path.join(packageDir, "package");
 }
 
 /**
- * Migrate a single npm package with all its versions
+ * Update package.json with target organization and repository
+ */
+function updatePackageMetadata(packageDir, sourceOrg, targetOrg, targetApiUrl, repoName) {
+  const pkgJsonPath = path.join(packageDir, "package.json");
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+
+  // Update package scope to target organization
+  pkgJson.name = pkgJson.name.replace(`@${sourceOrg}/`, `@${targetOrg}/`);
+
+  // Update repository link if needed
+  if (repoName || pkgJson.repository) {
+    updateRepositoryDetails(pkgJson, repoName, targetOrg, targetApiUrl);
+  }
+
+  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+  return pkgJson;
+}
+
+/**
+ * Update repository URL in package.json
+ */
+function updateRepositoryDetails(pkgJson, repoName, targetOrg, targetApiUrl) {
+  const targetHostname = getBaseHostname(targetApiUrl);
+  const existingUrl = typeof pkgJson.repository === "string" ? pkgJson.repository : pkgJson.repository?.url || "";
+
+  const extractedName =
+    repoName ||
+    existingUrl
+      ?.split("/")
+      ?.pop()
+      ?.replace(/\.git$/, "") ||
+    null;
+
+  if (extractedName) {
+    const newRepoUrl = `git+https://${targetHostname}/${targetOrg}/${extractedName}.git`;
+    if (typeof pkgJson.repository === "string") {
+      pkgJson.repository = newRepoUrl;
+    } else {
+      pkgJson.repository = pkgJson.repository || {};
+      pkgJson.repository.type = pkgJson.repository.type || "git";
+      pkgJson.repository.url = newRepoUrl;
+    }
+    core.debug(`Updated repository URL to: ${newRepoUrl}`);
+  }
+}
+
+/**
+ * Publish package to target registry
+ */
+function publishToRegistry(packageDir, npmrcPath, packageName, version) {
+  try {
+    execSync(`npm publish --userconfig ${npmrcPath}`, {
+      cwd: packageDir,
+      stdio: "inherit",
+    });
+    core.info(`Published ${packageName}@${version} successfully`);
+    return true;
+  } catch (error) {
+    logError(`Failed to publish package: ${error.message}`, packageName, version);
+    return false;
+  }
+}
+
+/**
+ * Setup temporary directory for package processing
+ */
+function setupVersionWorkspace(tempDir, packageName, version) {
+  const versionDir = path.join(tempDir, `${packageName}-${version}`);
+
+  if (fs.existsSync(versionDir)) {
+    cleanupTempDir(versionDir);
+  }
+
+  fs.mkdirSync(versionDir, { recursive: true });
+  return trackResource(versionDir);
+}
+
+/**
+ * Process a single version of a package
+ */
+async function processPackageVersion(packageName, version, context, versionDir) {
+  const { sourceOrg, sourceRegistryUrl, ghSourcePat, targetOrg, targetApiUrl, repoName } = context;
+
+  // Step 1: Get package tarball URL
+  const tarballUrl = await fetchPackageManifest(packageName, version, sourceRegistryUrl, sourceOrg, ghSourcePat);
+  if (!tarballUrl) return false;
+
+  // Step 2: Download and extract package
+  const packageDir = await downloadAndExtractPackage(tarballUrl, versionDir, ghSourcePat);
+  trackResource(packageDir);
+
+  // Step 3: Update package metadata
+  await updatePackageMetadata(packageDir, sourceOrg, targetOrg, targetApiUrl, repoName);
+
+  // Step 4: Publish to target registry
+  return publishToRegistry(packageDir, context.npmrcPath, packageName, version);
+}
+
+/**
+ * Migrate a single version with retries
+ */
+async function migrateVersion(packageName, version, context) {
+  const versionDir = setupVersionWorkspace(context.tempDir, packageName, version);
+
+  try {
+    return await withRetry(
+      () => processPackageVersion(packageName, version, context, versionDir),
+      {
+        onRetry: (error, attempt) => {
+          core.info(`Retry attempt ${attempt} for ${packageName}@${version}. Error: ${error.message}`);
+          core.debug(`Error details: ${JSON.stringify({ attempt }, null, 2)}`);
+
+          // Reset workspace for retry
+          cleanupTempDir(versionDir);
+          fs.mkdirSync(versionDir, { recursive: true });
+          trackResource(versionDir);
+        },
+      }
+    );
+  } finally {
+    cleanupTempDir(versionDir);
+  }
+}
+
+/**
+ * Migrate all versions of a package
  */
 async function migratePackage(pkg, context) {
   const { octokitSource, sourceOrg } = context;
+  const packageName = pkg.name;
+  const repoName = pkg.repository?.name || null;
+
+  core.info(`Migrating npm package: ${packageName}${repoName ? ` from repo: ${repoName}` : ""}`);
+
+  // Get all versions of the package
+  const versions = await fetchPackageVersions(octokitSource, sourceOrg, packageName, "npm");
+  if (!versions.length) {
+    return buildSkipResult(packageName);
+  }
+
+  const versionNames = versions.map((version) => version.name);
+  core.info(`Found ${versionNames.length} versions for package ${packageName}`);
+
+  // Process each version
   let successCount = 0;
   let failureCount = 0;
-  const packageName = pkg.name;
-  const repoName = pkg.repository?.name || "unknown";
 
-  core.info(`Migrating npm package: ${packageName} from repo: ${repoName}`);
-
-  // Get all versions for this npm package
-  const versions = await fetchVersions(octokitSource, sourceOrg, packageName, "npm");
-
-  if (versions.length === 0) {
-    core.warning(`No versions found for package ${packageName}`);
-    return { package: packageName, succeeded: 0, failed: 0, skipped: true, reason: "No versions found" };
+  for (const version of versionNames) {
+    const success = await migrateVersion(packageName, version, context);
+    success ? successCount++ : failureCount++;
   }
 
-  // Process each npm version
-  for (const version of versions) {
-    const versionName = version.name;
-    const success = await migrateVersion(packageName, versionName, context);
-    if (success) {
-      successCount++;
-    } else {
-      failureCount++;
-    }
-  }
-
-  return { package: packageName, succeeded: successCount, failed: failureCount };
+  return createPackageResult(packageName, successCount, failureCount);
 }
 
 /**
  * Main function
  */
 async function run() {
+  let tempDir = null;
+
   try {
-    // Get common inputs using the shared utility
-    const {
-      sourceOrg,
-      sourceApiUrl,
-      sourceRegistryUrl,
-      targetOrg,
-      targetApiUrl,
-      targetRegistryUrl,
-      ghSourcePat,
-      ghTargetPat,
-    } = getCommonInputs(core);
-
-    // Get the repo-name input (optional)
-    const repoName = core.getInput("repo-name", { required: false });
-
-    // Parse packages from input using the shared utility
+    // Parse input packages
     const packagesJson = core.getInput("packages", { required: true });
     const packages = parsePackagesInput(packagesJson, "npm");
 
-    if (packages.length === 0) {
+    if (!packages.length) {
       core.info("No npm packages to migrate");
       core.setOutput("result", JSON.stringify([]));
       return;
     }
 
-    // Set up work directory
-    const tempDir = path.join(process.cwd(), "temp");
-    fs.mkdirSync(tempDir, { recursive: true });
+    // Setup workspace and context
+    tempDir = createTempDir();
+    const baseContext = setupContext(core, "npm");
+    const repoName = core.getInput("repo-name", { required: false });
 
-    // Get registry URLs
-    const sourceNpmRegistry = sourceRegistryUrl || getNpmRegistryUrl(sourceApiUrl);
-    const targetNpmRegistry = targetRegistryUrl || getNpmRegistryUrl(targetApiUrl);
+    // Setup npm authentication
+    const npmrcPath = setupNpmAuthentication(
+      tempDir,
+      baseContext.targetOrg,
+      baseContext.targetRegistryUrl,
+      baseContext.ghTargetPat
+    );
 
-    // Set up Octokit client using the shared utility
-    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
-
-    // Set up npmrc file
-    const npmrcPath = writeNpmrc(tempDir, targetOrg, targetNpmRegistry, ghTargetPat);
-
-    // Prepare context with all configuration
+    // Create migration context
     const context = {
-      octokitSource,
-      sourceOrg,
-      sourceApiUrl,
-      sourceRegistryUrl: sourceNpmRegistry,
-      targetOrg,
-      targetApiUrl,
-      targetRegistryUrl: targetNpmRegistry,
-      ghSourcePat,
-      ghTargetPat,
+      ...baseContext,
       tempDir,
       npmrcPath,
       repoName,
     };
 
-    // Migrate all packages
-    const results = [];
-    for (const pkg of packages) {
-      const result = await migratePackage(pkg, context);
-      results.push(result);
-    }
-
-    // Output results using the shared utility
-    outputResults(results, "npm");
+    // Run migration
+    await migratePackagesWithContext(packages, context, migratePackage, "npm");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
+  } finally {
+    if (tempDir) {
+      cleanupTempDir(tempDir);
+    }
   }
 }
 

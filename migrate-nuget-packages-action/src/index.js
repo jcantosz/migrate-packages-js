@@ -1,5 +1,4 @@
 import * as core from "@actions/core";
-import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
 import { execSync, spawnSync } from "child_process";
@@ -7,17 +6,34 @@ import os from "os";
 import axios from "axios";
 import AdmZip from "adm-zip";
 import {
-  getCommonInputs,
-  createOctokitClient,
-  getNuGetRegistryUrl,
-  getBaseHostname,
-  outputResults,
   withRetry,
+  parsePackagesInput,
+  cleanupTempDir,
+  fetchPackageVersions,
+  createPackageResult,
+  migratePackagesWithContext,
+  setupContext,
+  trackResource,
 } from "../../shared/utils.js";
+
+// Helper functions to reduce nesting and repetition
+function logError(message, packageName, version) {
+  core.error(`${message} for ${packageName} ${version}`);
+}
+
+function logWarning(message, packageName, version) {
+  core.warning(`${message} for ${packageName} ${version}`);
+}
+
+function buildSkipResult(packageName) {
+  return createPackageResult(packageName, 0, 0, {
+    skipped: true,
+    reason: "No versions found",
+  });
+}
 
 /**
  * Sets up the environment for NuGet package migration
- * @returns {string} - Path to the temp directory
  */
 function setupEnvironment() {
   const timestamp = Date.now();
@@ -25,95 +41,64 @@ function setupEnvironment() {
   core.info(`Creating temp directory: ${tempDir}`);
 
   fs.mkdirSync(tempDir, { recursive: true });
-  return tempDir;
+  return trackResource(tempDir);
 }
 
 /**
  * Checks if dotnet is installed
- * @throws {Error} If dotnet is not installed
  */
 function checkDotNetInstallation() {
   try {
     execSync("dotnet --version", { stdio: "pipe" });
     core.info("dotnet is installed");
   } catch (err) {
-    throw new Error("dotnet is not installed or not accessible. dotnet is required for NuGet package migration.");
+    core.error("dotnet is not installed or not accessible");
+    throw err;
   }
 }
 
 /**
  * Installs the GPR tool
- * @param {string} tempDir - Path to the temp directory
- * @returns {string} - Path to the installed GPR tool
  */
 function installGpr(tempDir) {
-  try {
-    const toolsDir = path.join(tempDir, "tools");
-    fs.mkdirSync(toolsDir, { recursive: true });
+  const toolsDir = path.join(tempDir, "tools");
+  fs.mkdirSync(toolsDir, { recursive: true });
+  trackResource(toolsDir);
 
-    core.info("Installing gpr tool...");
-    spawnSync("dotnet", ["tool", "install", "gpr", "--tool-path", toolsDir], {
-      stdio: "inherit",
-      encoding: "utf-8",
-    });
+  core.info("Installing gpr tool...");
+  const result = spawnSync("dotnet", ["tool", "install", "gpr", "--tool-path", toolsDir], {
+    stdio: "inherit",
+    encoding: "utf-8",
+  });
 
-    // Get the appropriate extension based on OS
-    const extension = process.platform === "win32" ? ".exe" : "";
-    const gprPath = path.join(toolsDir, `gpr${extension}`);
-
-    // Verify GPR was installed
-    if (!fs.existsSync(gprPath)) {
-      throw new Error(`Failed to install gpr tool. Could not find ${gprPath}`);
-    }
-
-    core.info(`Successfully installed gpr at ${gprPath}`);
-    return gprPath;
-  } catch (err) {
-    throw new Error(`Error installing gpr: ${err.message}`);
+  if (result.status !== 0) {
+    core.error("Failed to install gpr tool");
+    throw new Error("Failed to install gpr");
   }
-}
 
-/**
- * Fetch all versions for a NuGet package
- * @param {Octokit} octokit - Authenticated Octokit instance
- * @param {string} org - Organization name
- * @param {string} packageName - Package name
- * @returns {Array} - List of versions
- */
-async function fetchVersions(octokit, org, packageName) {
-  try {
-    const versions = await octokit.paginate("GET /orgs/{org}/packages/nuget/{package_name}/versions", {
-      org,
-      package_name: packageName,
-      per_page: 100,
-    });
+  const extension = process.platform === "win32" ? ".exe" : "";
+  const gprPath = path.join(toolsDir, `gpr${extension}`);
 
-    // Extract just the version names
-    const versionNames = versions.map((version) => version.name);
-    core.info(`Found ${versionNames.length} versions for package ${packageName}`);
-    return versionNames;
-  } catch (err) {
-    core.warning(`Error fetching versions for NuGet package ${packageName}: ${err.message}`);
-    return [];
+  if (!fs.existsSync(gprPath)) {
+    core.error("Could not find gpr after installation");
+    throw new Error("gpr not found after installation");
   }
+
+  core.info(`Successfully installed gpr at ${gprPath}`);
+  return gprPath;
 }
 
 /**
  * Download a single NuGet package version
- * @param {string} packageName - Package name
- * @param {string} version - Package version
- * @param {string} sourceOrg - Source organization
- * @param {string} sourceRegistryUrl - Source registry URL
- * @param {string} token - GitHub PAT for source
- * @param {string} outputDir - Directory to save the package
- * @returns {string} - Path to the downloaded package
  */
 async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, token, outputDir) {
-  try {
-    const outputPath = path.join(outputDir, `${packageName}_${version}.nupkg`);
-    const url = `${sourceRegistryUrl}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
+  const outputPath = path.join(outputDir, `${packageName}_${version}.nupkg`);
+  trackResource(outputPath);
 
-    core.info(`Downloading ${packageName} version ${version} from ${url}`);
+  try {
+    const url = `${sourceRegistryUrl}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
+    core.info(`Downloading ${packageName} version ${version}`);
+    core.debug(`Download URL: ${url}`);
 
     const response = await axios({
       method: "get",
@@ -126,84 +111,67 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
     });
 
     fs.writeFileSync(outputPath, response.data);
-    core.info(`Successfully downloaded ${packageName} version ${version} to ${outputPath}`);
-
+    core.info(`Successfully downloaded ${packageName} version ${version}`);
     return outputPath;
   } catch (err) {
-    throw new Error(`Failed to download ${packageName} version ${version}: ${err.message}`);
+    if (err.response?.status === 401) {
+      logError("Failed to authenticate with source registry", packageName, version);
+    } else if (err.response?.status === 404) {
+      logWarning("Package not found in source registry", packageName, version);
+    } else {
+      logError(`Download failed: ${err.message}`, packageName, version);
+    }
+    throw err;
   }
 }
 
 /**
- * Fix NuGet package by removing duplicate files that cause errors with GPR
- * @param {string} packagePath - Path to the NuGet package
- * @returns {boolean} - True if successful
+ * Fix NuGet package metadata
  */
-function fixNuGetPackage(packagePath) {
+function fixNuGetPackage(packagePath, packageName, version) {
   try {
     core.info(`Fixing NuGet package: ${packagePath}`);
 
-    // Use adm-zip to remove the problematic files
     const zip = new AdmZip(packagePath);
-
-    // Remove the problematic entries that cause errors in gpr
     const filesToRemove = ["_rels/.rels", "[Content_Types].xml"];
-
-    // Get all entries
-    const entries = zip.getEntries();
-
-    // Keep track of seen entries to handle duplicates
     const seenPaths = new Set();
 
-    // Filter entries to keep just one copy of each file
-    entries.forEach((entry) => {
+    zip.getEntries().forEach((entry) => {
       if (filesToRemove.includes(entry.entryName)) {
         if (seenPaths.has(entry.entryName)) {
-          // This is a duplicate, remove it
           zip.deleteFile(entry.entryName);
+          core.debug(`Removed duplicate file: ${entry.entryName}`);
         } else {
           seenPaths.add(entry.entryName);
         }
       }
     });
 
-    // Write the fixed zip back to disk
     zip.writeZip(packagePath);
-
-    core.info(`Successfully fixed NuGet package: ${packagePath}`);
+    core.info("Successfully fixed NuGet package");
     return true;
   } catch (err) {
-    core.warning(`Failed to fix NuGet package: ${err.message}`);
-    return false;
+    logError(`Failed to fix package: ${err.message}`, packageName, version);
+    throw err;
   }
 }
 
 /**
- * Push a NuGet package to the target organization
- * @param {string} packagePath - Path to the NuGet package
- * @param {string} gprPath - Path to the GPR tool
- * @param {string} targetOrg - Target organization
- * @param {string} repoName - Repository name
- * @param {string} token - GitHub PAT for target
- * @param {string} targetApiUrl - Target API URL
- * @returns {boolean} - True if successful
+ * Push package to target registry
  */
-function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApiUrl) {
+function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApiUrl, packageName, version) {
   try {
     if (repoName) {
-      core.info(`Pushing ${packagePath} to ${targetOrg}/${repoName}`);
+      core.info(`Pushing ${packageName} to ${targetOrg}/${repoName}`);
     } else {
-      core.info(`Pushing ${packagePath} to ${targetOrg} (no repository specified)`);
+      core.info(`Pushing ${packageName} to ${targetOrg}`);
     }
 
-    // Prepare GPR arguments based on whether we have a repository name
     const gprArgs = ["push", packagePath, "-k", token];
 
-    // Only add repository parameter if repoName is provided
     if (repoName) {
-      // Use the shared utility function to extract the base hostname
-      const targetHostname = getBaseHostname(targetApiUrl);
-
+      const url = new URL(targetApiUrl);
+      const targetHostname = url.hostname.startsWith("api.") ? url.hostname.substring(4) : url.hostname;
       gprArgs.push("--repository", `https://${targetHostname}/${targetOrg}/${repoName}`);
     }
 
@@ -213,116 +181,88 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApi
     });
 
     if (result.status !== 0) {
-      throw new Error(`GPR push failed: ${result.stderr || result.stdout}`);
+      if (result.stderr?.toLowerCase().includes("unauthorized")) {
+        logError("Failed to authenticate with target registry", packageName, version);
+      } else {
+        logError(`GPR push failed: ${result.stderr || result.stdout}`, packageName, version);
+      }
+      throw new Error(result.stderr || result.stdout);
     }
 
-    if (repoName) {
-      core.info(`Successfully pushed ${packagePath} to ${targetOrg}/${repoName}`);
-    } else {
-      core.info(`Successfully pushed ${packagePath} to ${targetOrg}`);
-    }
+    core.info(`Successfully pushed ${packageName} version ${version}`);
     return true;
   } catch (err) {
-    core.warning(`Failed to push package: ${err.message}`);
-    return false;
-  }
-}
-
-/**
- * Migrate a single version of a NuGet package
- * @param {string} packageName - Package name
- * @param {string} version - Package version
- * @param {string} repoName - Repository name
- * @param {Object} context - Migration context
- * @param {string} tempDir - Temporary directory
- * @param {string} gprPath - Path to the GPR tool
- * @returns {boolean} - True if successful
- */
-async function migrateVersion(packageName, version, repoName, context, tempDir, gprPath) {
-  // Use withRetry function from shared utils with p-retry
-  try {
-    return await withRetry(
-      () => performNuGetVersionMigration(packageName, version, repoName, context, tempDir, gprPath),
-      {
-        retries: 3,
-        minTimeout: 2000,
-        maxTimeout: 10000,
-        onRetry: (error, attempt) => {
-          core.info(`Retry attempt ${attempt} for ${packageName} version ${version} after error: ${error.message}`);
-        },
-      }
-    );
-  } catch (err) {
-    core.warning(`Failed to migrate ${packageName} version ${version} after multiple attempts: ${err.message}`);
-    return false;
+    logError(`Unexpected error during push: ${err.message}`, packageName, version);
+    throw err;
   }
 }
 
 /**
  * Performs the actual NuGet package version migration
- * @param {string} packageName - Package name
- * @param {string} version - Package version
- * @param {string} repoName - Repository name
- * @param {Object} context - Migration context
- * @param {string} tempDir - Temporary directory
- * @param {string} gprPath - Path to the GPR tool
- * @returns {boolean} - True if successful
  */
 async function performNuGetVersionMigration(packageName, version, repoName, context, tempDir, gprPath) {
   const { sourceOrg, sourceRegistryUrl, targetOrg, targetApiUrl, ghSourcePat, ghTargetPat } = context;
 
-  // Download the package
-  const packagePath = await downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, ghSourcePat, tempDir);
+  try {
+    // Download the package
+    const packagePath = await downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, ghSourcePat, tempDir);
 
-  // Fix the package (remove duplicate entries)
-  const fixResult = fixNuGetPackage(packagePath);
-  if (!fixResult) {
-    throw new Error(`Failed to fix package ${packageName} version ${version}`);
+    // Fix the package
+    await fixNuGetPackage(packagePath, packageName, version);
+
+    // Push the package
+    await pushPackage(packagePath, gprPath, targetOrg, repoName, ghTargetPat, targetApiUrl, packageName, version);
+
+    return true;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      logError("Authentication failed", packageName, version);
+    } else if (error.response?.status === 404) {
+      logWarning("Package/version not found", packageName, version);
+    } else {
+      logError(`Migration failed: ${error.message}`, packageName, version);
+    }
+    return false;
   }
+}
 
-  // Push the package to the target
-  const pushResult = pushPackage(packagePath, gprPath, targetOrg, repoName, ghTargetPat, targetApiUrl);
-  if (!pushResult) {
-    throw new Error(`Failed to push package ${packageName} version ${version}`);
-  }
-
-  return true;
+/**
+ * Migrate a single version of a package
+ */
+async function migrateVersion(packageName, version, repoName, context, tempDir, gprPath) {
+  return await withRetry(
+    () => performNuGetVersionMigration(packageName, version, repoName, context, tempDir, gprPath),
+    {
+      onRetry: (error, attempt) => {
+        core.info(`Retry attempt ${attempt} for ${packageName} version ${version}. Error: ${error.message}`);
+        core.debug(`Error details: ${JSON.stringify({ attempt }, null, 2)}`);
+      },
+    }
+  );
 }
 
 /**
  * Migrate a single NuGet package with all its versions
- * @param {Object} pkg - Package object
- * @param {Object} context - Migration context
- * @param {string} tempDir - Temporary directory
- * @param {string} gprPath - Path to the GPR tool
- * @returns {Object} - Migration result
  */
-async function migratePackage(pkg, context, tempDir, gprPath) {
-  const { octokitSource, sourceOrg } = context;
-  let successCount = 0;
-  let failureCount = 0;
-
+async function migratePackage(pkg, context) {
+  const { octokitSource, sourceOrg, tempDir, gprPath } = context;
   const packageName = pkg.name;
-  const repoName = pkg.repository?.name || null; // Don't default to package name
+  const repoName = pkg.repository?.name || null;
 
   core.info(`Migrating NuGet package: ${packageName}${repoName ? ` from repo: ${repoName}` : ""}`);
 
-  // Get all versions for this NuGet package
-  const versions = await fetchVersions(octokitSource, sourceOrg, packageName);
-
-  if (versions.length === 0) {
-    core.warning(`No versions found for package ${packageName}`);
-    return {
-      package: packageName,
-      succeeded: 0,
-      failed: 0,
-      skipped: true,
-      reason: "No versions found",
-    };
+  const versions = await fetchPackageVersions(octokitSource, sourceOrg, packageName, "nuget");
+  if (!versions.length) {
+    return buildSkipResult(packageName);
   }
 
-  // Migrate each version
-  for (const version of versions) {
+  const versionNames = versions.map((version) => version.name);
+  core.info(`Found ${versionNames.length} versions for package ${packageName}`);
+
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (const version of versionNames) {
     const success = await migrateVersion(packageName, version, repoName, context, tempDir, gprPath);
     if (success) {
       successCount++;
@@ -331,39 +271,7 @@ async function migratePackage(pkg, context, tempDir, gprPath) {
     }
   }
 
-  return {
-    package: packageName,
-    succeeded: successCount,
-    failed: failureCount,
-  };
-}
-
-/**
- * Parse packages input from JSON
- * @param {string} packagesJson - JSON string
- * @returns {Array} - Parsed packages
- */
-function parsePackagesInput(packagesJson) {
-  try {
-    const packages = JSON.parse(packagesJson);
-    core.info(`Found ${packages.length} NuGet packages to migrate`);
-    return packages;
-  } catch (err) {
-    throw new Error(`Invalid packages input: ${err.message}`);
-  }
-}
-
-/**
- * Clean up temporary directories and resources
- * @param {string} tempDir - Path to the temp directory
- */
-function cleanUp(tempDir) {
-  try {
-    core.info(`Cleaning up temporary directory: ${tempDir}`);
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  } catch (err) {
-    core.warning(`Failed to clean up temporary directory: ${err.message}`);
-  }
+  return createPackageResult(packageName, successCount, failureCount);
 }
 
 /**
@@ -373,68 +281,32 @@ async function run() {
   let tempDir = null;
 
   try {
-    // Get common inputs using the shared utility
-    const {
-      sourceOrg,
-      sourceApiUrl,
-      sourceRegistryUrl,
-      targetOrg,
-      targetApiUrl,
-      targetRegistryUrl,
-      ghSourcePat,
-      ghTargetPat,
-    } = getCommonInputs(core);
-
-    // Parse packages input
     const packagesJson = core.getInput("packages", { required: true });
-    const packages = parsePackagesInput(packagesJson);
+    const packages = parsePackagesInput(packagesJson, "nuget");
 
-    if (packages.length === 0) {
+    if (!packages.length) {
       core.info("No NuGet packages to migrate");
       core.setOutput("result", JSON.stringify([]));
       return;
     }
 
-    // Check prerequisites and setup environment
     checkDotNetInstallation();
     tempDir = setupEnvironment();
     const gprPath = installGpr(tempDir);
 
-    // Get registry URLs
-    const sourceNuGetRegistry = sourceRegistryUrl || getNuGetRegistryUrl(sourceApiUrl);
-    const targetNuGetRegistry = targetRegistryUrl || getNuGetRegistryUrl(targetApiUrl);
-
-    // Set up Octokit client using the shared utility
-    const octokitSource = createOctokitClient(ghSourcePat, sourceApiUrl);
-
-    // Prepare context with all configuration
+    const baseContext = setupContext(core, "nuget");
     const context = {
-      octokitSource,
-      sourceOrg,
-      sourceApiUrl,
-      sourceRegistryUrl: sourceNuGetRegistry,
-      targetOrg,
-      targetApiUrl,
-      targetRegistryUrl: targetNuGetRegistry,
-      ghSourcePat,
-      ghTargetPat,
+      ...baseContext,
+      tempDir,
+      gprPath,
     };
 
-    // Migrate all packages
-    const results = [];
-    for (const pkg of packages) {
-      const result = await migratePackage(pkg, context, tempDir, gprPath);
-      results.push(result);
-    }
-
-    // Output results using the shared utility function
-    outputResults(results, "nuget");
+    await migratePackagesWithContext(packages, context, migratePackage, "nuget");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
   } finally {
-    // Clean up temp directory
     if (tempDir) {
-      cleanUp(tempDir);
+      cleanupTempDir(tempDir);
     }
   }
 }
