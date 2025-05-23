@@ -2,9 +2,9 @@
   "name": "migrate-npm-packages-action",
   "version": "1.0.0",
   "description": "A GitHub Action to migrate npm packages between GitHub organizations.",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "build": "ncc build src/index.js -o dist -m",
+    "build": "ncc build index.js -o dist --source-map -m",
     "test": "echo 'No tests defined'"
   },
   "dependencies": {
@@ -17,8 +17,5 @@
   "type": "module",
   "keywords": [],
   "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@vercel/ncc": "^0.38.3"
-  }
+  "license": "MIT"
 }

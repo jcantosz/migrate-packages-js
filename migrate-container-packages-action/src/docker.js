@@ -1,5 +1,4 @@
 import { execSync } from "child_process";
-import { logError, logWarning, logInfo } from "../../shared/utils.js";
 
 /**
  * Check Docker installation
@@ -8,7 +7,7 @@ export function checkDockerInstallation() {
   try {
     execSync("docker --version", { stdio: "pipe" });
   } catch (err) {
-    logError("Docker is not installed or not accessible");
+    core.error("Docker is not installed or not accessible");
     throw err;
   }
 }
@@ -18,11 +17,11 @@ export function checkDockerInstallation() {
  */
 export function setupSkopeo() {
   try {
-    logInfo("Pulling skopeo Docker image...");
+    core.info("Pulling skopeo Docker image...");
     execSync("docker pull quay.io/skopeo/stable:latest", { stdio: "inherit" });
     return true;
   } catch (err) {
-    logError("Failed to pull Skopeo image");
+    core.error("Failed to pull Skopeo image");
     throw err;
   }
 }
@@ -39,11 +38,11 @@ export function executeSkopeoCommand(skopeoCommand, packageName, reference) {
   } catch (err) {
     const errorMsg = err.message.toLowerCase();
     if (errorMsg.includes("unauthorized")) {
-      logError("Failed to authenticate with registry", packageName, reference);
+      core.error("Failed to authenticate with registry", packageName, reference);
     } else if (errorMsg.includes("not found")) {
-      logWarning("Image not found", packageName, reference);
+      core.warning("Image not found", packageName, reference);
     } else {
-      logError(`Skopeo command failed: ${err.message}`, packageName, reference);
+      core.error(`Skopeo command failed: ${err.message}`, packageName, reference);
     }
     return false;
   }

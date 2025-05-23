@@ -28,41 +28,6 @@ const DEFAULT_RETRY_CONFIG = {
 };
 
 /**
- * Standardized logging functions for all package types
- */
-export function logError(message, packageName = "", versionOrRef = "") {
-  if (packageName) {
-    core.error(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
-    return;
-  }
-  core.error(message);
-}
-
-export function logWarning(message, packageName = "", versionOrRef = "") {
-  if (packageName) {
-    core.warning(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
-    return;
-  }
-  core.warning(message);
-}
-
-export function logInfo(message, packageName = "", versionOrRef = "") {
-  if (packageName) {
-    core.info(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
-    return;
-  }
-  core.info(message);
-}
-
-export function logDebug(message, packageName = "", versionOrRef = "") {
-  if (packageName) {
-    core.debug(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
-    return;
-  }
-  core.debug(message);
-}
-
-/**
  * Get common inputs from GitHub Actions core
  */
 export function getCommonInputs(core) {

@@ -1,4 +1,5 @@
-import { withRetry, fetchPackageVersions, createPackageResult, getRegistryUrl, logInfo } from "../../shared/utils.js";
+import * as core from "@actions/core";
+import { withRetry, fetchPackageVersions, createPackageResult, getRegistryUrl } from "../../shared/utils.js";
 import { executeSkopeoCommand } from "./docker.js";
 
 /**
@@ -66,14 +67,14 @@ function performImageMigration(packageName, reference, context, isDigest) {
   const targetImage = buildImageReference(targetRegistry, targetOrg, packageName, reference, isDigest);
 
   const referencePrefix = isDigest ? "@" : ":";
-  logInfo(`Migrating ${packageName}${referencePrefix}${reference}`);
+  core.info(`Migrating ${packageName}${referencePrefix}${reference}`);
 
   const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
   const success = executeSkopeoCommand(skopeoCommand, packageName, reference);
 
   if (success) {
-    logInfo(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
+    core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
   }
 
   return success;
@@ -97,7 +98,7 @@ async function migrateReferences(packageName, references, context) {
       onRetry: (error, attempt) => {
         const referenceType = isDigest ? "digest" : "tag";
         const referencePrefix = isDigest ? "@" : ":";
-        logInfo(
+        core.info(
           `Retry attempt ${attempt} for ${packageName}${referencePrefix}${reference} (${referenceType}). Error: ${error.message}`
         );
       },
@@ -131,7 +132,7 @@ export async function migratePackage(pkg, context) {
   const packageName = pkg.name;
   const repoName = pkg.repository?.name || "unknown";
 
-  logInfo(`Migrating container package: ${packageName} from repo: ${repoName}`);
+  core.info(`Migrating container package: ${packageName} from repo: ${repoName}`);
 
   const versions = await fetchPackageVersions(octokitSource, sourceOrg, packageName, "container");
   if (!versions.length) {

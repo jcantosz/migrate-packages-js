@@ -4,7 +4,7 @@ import path from "path";
 import axios from "axios";
 import * as tar from "tar";
 import { execSync } from "child_process";
-import { logError, logWarning, logInfo, trackResource } from "../../shared/utils.js";
+import { trackResource } from "../../shared/utils.js";
 import { updateRepositoryDetails } from "./repository.js";
 
 async function downloadPackage(tarballUrl, ghSourcePat) {
@@ -51,10 +51,10 @@ export function publishToRegistry(packageDir, npmrcPath, packageName, version) {
       cwd: packageDir,
       stdio: "inherit",
     });
-    logInfo(`Published ${packageName}@${version} successfully`);
+    core.info(`Published ${packageName}@${version} successfully`);
     return true;
   } catch (error) {
-    logError(`Failed to publish package: ${error.message}`, packageName, version);
+    core.error(`Failed to publish package: ${error.message}`, packageName, version);
     return false;
   }
 }
@@ -69,18 +69,18 @@ export async function fetchPackageManifest(packageName, versionName, sourceRegis
 
     const tarballUrl = manifest.data.versions[versionName]?.dist.tarball;
     if (!tarballUrl) {
-      logWarning("Version not found in manifest", packageName, versionName);
+      core.warning("Version not found in manifest", packageName, versionName);
       return null;
     }
 
     return tarballUrl;
   } catch (error) {
     if (error.response?.status === 401) {
-      logError("Failed to authenticate with source registry", packageName, versionName);
+      core.error("Failed to authenticate with source registry", packageName, versionName);
     } else if (error.response?.status === 404) {
-      logWarning("Package manifest not found", packageName, versionName);
+      core.warning("Package manifest not found", packageName, versionName);
     } else {
-      logError(`Failed to fetch manifest: ${error.message}`, packageName, versionName);
+      core.error(`Failed to fetch manifest: ${error.message}`, packageName, versionName);
     }
     throw error;
   }
@@ -100,7 +100,7 @@ export async function processPackageVersion(packageName, version, context, versi
 
     return publishToRegistry(packageDir, npmrcPath, packageName, version);
   } catch (error) {
-    logError(error.message, packageName, version);
+    core.error(error.message, packageName, version);
     return false;
   }
 }

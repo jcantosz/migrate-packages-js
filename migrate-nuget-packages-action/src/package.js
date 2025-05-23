@@ -4,19 +4,14 @@ import path from "path";
 import axios from "axios";
 import AdmZip from "adm-zip";
 import { spawnSync } from "child_process";
-import { trackResource, logInfo, logError, logPackageAction } from "../../shared/utils.js";
-
-function logMessage(isError, message, packageName, version) {
-  const logFn = isError ? logError : logInfo;
-  logFn(`${message} for ${packageName} ${version}`);
-}
+import { trackResource } from "../../shared/utils.js";
 
 async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUrl, token, outputDir) {
   const outputPath = path.join(outputDir, `${packageName}_${version}.nupkg`);
   trackResource(outputPath);
 
   const url = `${sourceRegistryUrl}/${sourceOrg}/download/${packageName}/${version}/${packageName}.${version}.nupkg`;
-  logInfo(`Downloading ${packageName} version ${version}`);
+  core.info(`Downloading ${packageName} version ${version}`);
   core.debug(`Download URL: ${url}`);
 
   const response = await axios({
@@ -30,12 +25,12 @@ async function downloadPackage(packageName, version, sourceOrg, sourceRegistryUr
   });
 
   fs.writeFileSync(outputPath, response.data);
-  logInfo(`Successfully downloaded ${packageName} version ${version}`);
+  core.info(`Successfully downloaded ${packageName} version ${version}`);
   return outputPath;
 }
 
 function fixNuGetPackage(packagePath, packageName, version) {
-  logInfo(`Fixing NuGet package: ${packagePath}`);
+  core.info(`Fixing NuGet package: ${packagePath}`);
   const zip = new AdmZip(packagePath);
   const filesToRemove = ["_rels/.rels", "[Content_Types].xml"];
   const seenPaths = new Set();
@@ -50,13 +45,13 @@ function fixNuGetPackage(packagePath, packageName, version) {
   });
 
   zip.writeZip(packagePath);
-  logInfo("Successfully fixed NuGet package");
+  core.info("Successfully fixed NuGet package");
   return true;
 }
 
 function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApiUrl, packageName, version) {
   const targetInfo = repoName ? `${targetOrg}/${repoName}` : targetOrg;
-  logInfo(`Pushing ${packageName} to ${targetInfo}`);
+  core.info(`Pushing ${packageName} to ${targetInfo}`);
 
   const gprArgs = ["push", packagePath, "-k", token];
 
@@ -74,7 +69,7 @@ function pushPackage(packagePath, gprPath, targetOrg, repoName, token, targetApi
     throw new Error(errorMessage);
   }
 
-  logInfo(`Successfully pushed ${packageName} version ${version}`);
+  core.info(`Successfully pushed ${packageName} version ${version}`);
   return true;
 }
 
@@ -89,11 +84,11 @@ export async function processPackageVersion(packageName, version, repoName, cont
   } catch (error) {
     const status = error.response?.status;
     if (status === 401) {
-      logMessage(true, "Authentication failed", packageName, version);
+      core.error(`Authentication failed for ${packageName} ${version}`);
     } else if (status === 404) {
-      logMessage(false, "Package/version not found", packageName, version);
+      core.info(`Package/version not found for ${packageName} ${version}`);
     } else {
-      logMessage(true, `Migration failed: ${error.message}`, packageName, version);
+      core.error(`Migration failed: ${error.message} for ${packageName} ${version}`);
     }
     return false;
   }
