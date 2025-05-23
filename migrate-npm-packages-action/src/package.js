@@ -15,11 +15,17 @@ async function downloadPackage(tarballUrl, ghSourcePat) {
 }
 
 async function extractPackage(packageData, packageDir) {
+  const tmpFile = path.join(packageDir, 'temp.tgz');
+  fs.writeFileSync(tmpFile, Buffer.from(packageData));
+  
   await tar.x({
     cwd: packageDir,
-    file: Buffer.from(packageData),
+    file: tmpFile,
+    strip: 1
   });
-  return path.join(packageDir, "package");
+  
+  fs.unlinkSync(tmpFile);
+  return packageDir;
 }
 
 export async function downloadAndExtractPackage(tarballUrl, packageDir, ghSourcePat) {
