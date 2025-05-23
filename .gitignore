@@ -3,6 +3,8 @@
 **/.DS_Store
 *.pem
 *.json
+!package.json
+!package-lock.json
 node_modules*
 local-test.sh
 local.setup-migration-vars.sh

@@ -3,7 +3,6 @@ import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
 import pRetry from "p-retry";
-import * as errors from "./errors.js";
 
 /**
  * Shared utilities for package migration actions
@@ -27,6 +26,41 @@ const DEFAULT_RETRY_CONFIG = {
     "EADDRNOTAVAIL",
   ],
 };
+
+/**
+ * Standardized logging functions for all package types
+ */
+export function logError(message, packageName = "", versionOrRef = "") {
+  if (packageName) {
+    core.error(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
+    return;
+  }
+  core.error(message);
+}
+
+export function logWarning(message, packageName = "", versionOrRef = "") {
+  if (packageName) {
+    core.warning(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
+    return;
+  }
+  core.warning(message);
+}
+
+export function logInfo(message, packageName = "", versionOrRef = "") {
+  if (packageName) {
+    core.info(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
+    return;
+  }
+  core.info(message);
+}
+
+export function logDebug(message, packageName = "", versionOrRef = "") {
+  if (packageName) {
+    core.debug(`${message} for ${packageName}${versionOrRef ? `@${versionOrRef}` : ""}`);
+    return;
+  }
+  core.debug(message);
+}
 
 /**
  * Get common inputs from GitHub Actions core
@@ -64,15 +98,7 @@ export async function withRetry(operation, options = {}) {
 
   return pRetry(
     async () => {
-      try {
-        return await operation();
-      } catch (error) {
-        // Don't retry authentication or not found errors
-        if (error instanceof errors.AuthenticationError || error instanceof errors.PackageNotFoundError) {
-          throw new pRetry.AbortError(error.message);
-        }
-        throw error;
-      }
+      return await operation();
     },
     {
       ...config,
