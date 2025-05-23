@@ -1,0 +1,26 @@
+{
+  "name": "get-packages-action",
+  "version": "1.0.0",
+  "description": "GitHub Action to discover and filter packages from a GitHub organization",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ncc build index.js -o dist --source-map -m"
+  },
+  "keywords": [
+    "github",
+    "action",
+    "packages",
+    "npm",
+    "docker",
+    "nuget"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@octokit/plugin-paginate-rest": "^9.1.5",
+    "@octokit/rest": "^21.1.1"
+  }
+}

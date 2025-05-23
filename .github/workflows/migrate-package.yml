@@ -1,28 +1,28 @@
 on:
   workflow_dispatch:
     inputs:
-      repo-name:
+      repo_name:
         description: "Repository name to filter packages (leave empty for packages without repo)"
         required: false
-run-name: Migrating ${{ inputs.repo-name || 'Org'}} packages
+run-name: Migrating ${{ inputs.repo_name || 'Org'}} packages
 name: Migrate GitHub Packages
 
 jobs:
   get-packages:
     runs-on: ubuntu-latest
     outputs:
-      npm-packages: ${{ steps.get-packages.outputs.npm-packages }}
-      npm-count: ${{ steps.get-packages.outputs.npm-count }}
-      container-packages: ${{ steps.get-packages.outputs.container-packages }}
-      container-count: ${{ steps.get-packages.outputs.container-count }}
-      nuget-packages: ${{ steps.get-packages.outputs.nuget-packages }}
-      nuget-count: ${{ steps.get-packages.outputs.nuget-count }}
-      rubygems-packages: ${{ steps.get-packages.outputs.rubygems-packages }}
-      rubygems-count: ${{ steps.get-packages.outputs.rubygems-count }}
-      maven-packages: ${{ steps.get-packages.outputs.maven-packages }}
-      maven-count: ${{ steps.get-packages.outputs.maven-count }}
-      all-packages: ${{ steps.get-packages.outputs.all-packages }}
-      total-count: ${{ steps.get-packages.outputs.total-count }}
+      npm_packages: ${{ steps.get-packages.outputs.npm_packages }}
+      npm_count: ${{ steps.get-packages.outputs.npm_count }}
+      container_packages: ${{ steps.get-packages.outputs.container_packages }}
+      container_count: ${{ steps.get-packages.outputs.container_count }}
+      nuget_packages: ${{ steps.get-packages.outputs.nuget_packages }}
+      nuget_count: ${{ steps.get-packages.outputs.nuget_count }}
+      rubygems_packages: ${{ steps.get-packages.outputs.rubygems_packages }}
+      rubygems_count: ${{ steps.get-packages.outputs.rubygems_count }}
+      maven_packages: ${{ steps.get-packages.outputs.maven_packages }}
+      maven_count: ${{ steps.get-packages.outputs.maven_count }}
+      all_packages: ${{ steps.get-packages.outputs.all_packages }}
+      total_count: ${{ steps.get-packages.outputs.total_count }}
 
     steps:
       - name: Checkout
@@ -32,10 +32,10 @@ jobs:
         id: get-packages
         uses: ./get-packages-action
         with:
-          source-org: ${{ vars.source_org }}
-          source-api-url: ${{ vars.source_api_url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          repo-name: ${{ github.event.inputs.repo-name }}
+          source_org: ${{ vars.source_org }}
+          source_api_url: ${{ vars.source_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo_name: ${{ github.event.inputs.repo_name }}
 
   list-outputs:
     runs-on: ubuntu-latest
@@ -45,19 +45,19 @@ jobs:
         if: always()
         id: write-output
         run: |
-          echo "NPM packages found: ${{ needs.get-packages.outputs.npm-count }}"
-          echo "Container packages found: ${{ needs.get-packages.outputs.container-count }}"
-          echo "NuGet packages found: ${{ needs.get-packages.outputs.nuget-count }}"
-          echo "RubyGems packages found: ${{ needs.get-packages.outputs.rubygems-count }}"
-          echo "Maven packages found: ${{ needs.get-packages.outputs.maven-count }}"
-          echo "Total packages found: ${{ needs.get-packages.outputs.total-count }}"
+          echo "NPM packages found: ${{ needs.get-packages.outputs.npm_count }}"
+          echo "Container packages found: ${{ needs.get-packages.outputs.container_count }}"
+          echo "NuGet packages found: ${{ needs.get-packages.outputs.nuget_count }}"
+          echo "RubyGems packages found: ${{ needs.get-packages.outputs.rubygems_count }}"
+          echo "Maven packages found: ${{ needs.get-packages.outputs.maven_count }}"
+          echo "Total packages found: ${{ needs.get-packages.outputs.total_count }}"
           echo "------"
-          echo "All packages found: ${{ needs.get-packages.outputs.all-packages }}"
-          echo "NPM packages: ${{ needs.get-packages.outputs.npm-packages }}"
-          echo "Container packages: ${{ needs.get-packages.outputs.container-packages }}"
-          echo "NuGet packages: ${{ needs.get-packages.outputs.nuget-packages }}"
-          echo "RubyGems packages: ${{ needs.get-packages.outputs.rubygems-packages }}"
-          echo "Maven packages: ${{ needs.get-packages.outputs.maven-packages }}"
+          echo "All packages found: ${{ needs.get-packages.outputs.all_packages }}"
+          echo "NPM packages: ${{ needs.get-packages.outputs.npm_packages }}"
+          echo "Container packages: ${{ needs.get-packages.outputs.container_packages }}"
+          echo "NuGet packages: ${{ needs.get-packages.outputs.nuget_packages }}"
+          echo "RubyGems packages: ${{ needs.get-packages.outputs.rubygems_packages }}"
+          echo "Maven packages: ${{ needs.get-packages.outputs.maven_packages }}"
           echo "------"
           echo "output: ${{ needs.get-packages.outputs }}"
           echo "output: ${{ toJson(needs.get-packages.outputs) }}"
@@ -65,7 +65,7 @@ jobs:
   migrate-nuget:
     runs-on: ubuntu-latest
     needs: get-packages
-    if: needs.get-packages.outputs.nuget-count > 0
+    if: needs.get-packages.outputs.nuget_count > 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,18 +74,18 @@ jobs:
         uses: ./migrate-nuget-packages-action
         id: migrate-nuget
         with:
-          source-org: ${{ vars.source_org }}
-          source-api-url: ${{ vars.source_api_url }}
-          target-org: ${{ vars.target_org }}
-          target-api-url: ${{ vars.target_api_url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ needs.get-packages.outputs.nuget-packages }}
+          source_org: ${{ vars.source_org }}
+          source_api_url: ${{ vars.source_api_url }}
+          target_org: ${{ vars.target_org }}
+          target_api_url: ${{ vars.target_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh_target_pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ needs.get-packages.outputs.nuget_packages }}
 
   migrate-npm:
     runs-on: ubuntu-latest
     needs: get-packages
-    if: needs.get-packages.outputs.npm-count > 0
+    if: needs.get-packages.outputs.npm_count > 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,19 +94,19 @@ jobs:
         uses: ./migrate-npm-packages-action
         id: migrate-npm
         with:
-          source-org: ${{ vars.source_org }}
-          source-api-url: ${{ vars.source_api_url }}
-          target-org: ${{ vars.target_org }}
-          target-api-url: ${{ vars.target_api_url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ needs.get-packages.outputs.npm-packages }}
-          repo-name: ${{ github.event.inputs.repo-name }} # needed to fill in the package metadata
+          source_org: ${{ vars.source_org }}
+          source_api_url: ${{ vars.source_api_url }}
+          target_org: ${{ vars.target_org }}
+          target_api_url: ${{ vars.target_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh_target_pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ needs.get-packages.outputs.npm_packages }}
+          repo_name: ${{ github.event.inputs.repo_name }}
 
   migrate-container:
     runs-on: ubuntu-latest
     needs: get-packages
-    if: needs.get-packages.outputs.container-count > 0
+    if: needs.get-packages.outputs.container_count > 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,10 +115,10 @@ jobs:
         uses: ./migrate-container-packages-action
         id: migrate-container
         with:
-          source-org: ${{ vars.source_org }}
-          source-api-url: ${{ vars.source_api_url }}
-          target-org: ${{ vars.target_org }}
-          target-api-url: ${{ vars.target_api_url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ needs.get-packages.outputs.container-packages }}
+          source_org: ${{ vars.source_org }}
+          source_api_url: ${{ vars.source_api_url }}
+          target_org: ${{ vars.target_org }}
+          target_api_url: ${{ vars.target_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh_target_pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ needs.get-packages.outputs.container_packages }}

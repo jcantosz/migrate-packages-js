@@ -31,14 +31,14 @@ const DEFAULT_RETRY_CONFIG = {
  * Get common inputs from GitHub Actions core
  */
 export function getCommonInputs(core) {
-  const sourceOrg = core.getInput("source-org", { required: true });
-  const sourceApiUrl = core.getInput("source-api-url", { required: true });
-  const sourceRegistryUrl = core.getInput("source-registry-url", { required: false });
-  const targetOrg = core.getInput("target-org", { required: true });
-  const targetApiUrl = core.getInput("target-api-url", { required: true });
-  const targetRegistryUrl = core.getInput("target-registry-url", { required: false });
-  const ghSourcePat = core.getInput("gh-source-pat", { required: true });
-  const ghTargetPat = core.getInput("gh-target-pat", { required: true });
+  const sourceOrg = core.getInput("source_org", { required: true });
+  const sourceApiUrl = core.getInput("source_api_url", { required: true });
+  const sourceRegistryUrl = core.getInput("source_registry_url", { required: false });
+  const targetOrg = core.getInput("target_org", { required: true });
+  const targetApiUrl = core.getInput("target_api_url", { required: true });
+  const targetRegistryUrl = core.getInput("target_registry_url", { required: false });
+  const ghSourcePat = core.getInput("gh_source_pat", { required: true });
+  const ghTargetPat = core.getInput("gh_target_pat", { required: true });
 
   return {
     sourceOrg,
@@ -388,7 +388,7 @@ export function outputResults(results, packageType) {
 
   // Set output
   core.setOutput("result", JSON.stringify(results));
-  core.setOutput("result-summary", summary);
+  core.setOutput("result_summary", summary);
 
   // Set job status based on results
   if (totals.failed > 0 && totals.success === 0) {

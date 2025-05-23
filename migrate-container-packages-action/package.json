@@ -1,0 +1,26 @@
+{
+  "name": "migrate-container-packages-action",
+  "version": "1.0.0",
+  "description": "GitHub Action to migrate container packages between GitHub organizations",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ncc build src/main.js -o dist --source-map -m"
+  },
+  "keywords": [
+    "github",
+    "action",
+    "container",
+    "docker",
+    "package",
+    "migration"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@octokit/rest": "^21.1.1",
+    "axios": "^1.9.0"
+  }
+}

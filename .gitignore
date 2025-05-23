@@ -3,6 +3,8 @@
 **/.DS_Store
 *.pem
 *.json
+*.bak
+.env
 !package.json
 !package-lock.json
 node_modules*

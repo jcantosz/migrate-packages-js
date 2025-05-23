@@ -1,0 +1,20 @@
+{
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@octokit/rest": "^21.1.1",
+    "axios": "^1.9.0",
+    "p-retry": "^6.2.1",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1"
+  },
+  "scripts": {
+    "build": "npm run build:all",
+    "build:all": "npm run build:get-packages && npm run build:migrate-container && npm run build:migrate-npm && npm run build:migrate-nuget",
+    "build:get-packages": "cd get-packages-action && npm run build",
+    "build:migrate-container": "cd migrate-container-packages-action && npm run build",
+    "build:migrate-npm": "cd migrate-npm-packages-action && npm run build",
+    "build:migrate-nuget": "cd migrate-nuget-packages-action && npm run build"
+  }
+}

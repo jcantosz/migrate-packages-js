@@ -1,30 +1,30 @@
 name: "Migrate Container Packages"
 description: "GitHub Action to migrate container packages between GitHub organizations"
 inputs:
-  source-org:
+  source_org:
     description: "The source organization from which to migrate container packages"
     required: true
-  source-api-url:
+  source_api_url:
     description: "The source GitHub API URL (e.g., https://github.com)"
     required: true
     default: "https://api.github.com"
-  source-registry-url:
+  source_registry_url:
     description: "The source container registry URL (e.g., https://containers.HOSTNAME/). If not provided, will be derived from the API URL"
     required: false
-  target-org:
+  target_org:
     description: "The target organization to which to migrate container packages"
     required: true
-  target-api-url:
+  target_api_url:
     description: "The target GitHub API URL (e.g., https://api.github.com)"
     required: true
     default: "https://api.github.com"
-  target-registry-url:
+  target_registry_url:
     description: "The target container registry URL (e.g., https://containers.HOSTNAME/). If not provided, will be derived from the API URL"
     required: false
-  gh-source-pat:
+  gh_source_pat:
     description: "GitHub PAT for reading packages from source host"
     required: true
-  gh-target-pat:
+  gh_target_pat:
     description: "GitHub PAT for writing packages to target host"
     required: true
   packages:
@@ -33,7 +33,7 @@ inputs:
 outputs:
   result:
     description: "The results of the migration process as a JSON array with success/failure counts for each package"
-  result-summary:
+  result_summary:
     description: "The summarized results with success/failure counts for each package"
 runs:
   using: "node20"

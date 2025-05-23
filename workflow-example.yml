@@ -3,124 +3,135 @@ name: Migrate GitHub Packages Example
 on:
   workflow_dispatch:
     inputs:
-      source-org:
-        description: 'Source organization name'
+      source_org:
+        description: "Source organization name"
         required: true
-      source-api-url:
-        description: 'Source GitHub API URL'
+      source_api_url:
+        description: "Source GitHub API URL"
         required: true
-        default: 'https://api.github.com'
-      source-registry-url:
-        description: 'Source container registry URL (leave empty to derive from API URL)'
+        default: "https://api.github.com"
+      source_registry_url:
+        description: "Source container registry URL (leave empty to derive from API URL)"
         required: false
-      target-org:
-        description: 'Target organization name'
+      target_org:
+        description: "Target organization name"
         required: true
-      target-api-url:
-        description: 'Target GitHub API URL'
+      target_api_url:
+        description: "Target GitHub API URL"
         required: true
-        default: 'https://api.github.com'
-      target-registry-url:
-        description: 'Target container registry URL (leave empty to derive from API URL)'
+        default: "https://api.github.com"
+      target_registry_url:
+        description: "Target container registry URL (leave empty to derive from API URL)"
         required: false
-      repo-name:
-        description: 'Repository name to filter packages (leave empty for packages without repo)'
+      repo_name:
+        description: "Repository name to filter packages (leave empty for packages without repo)"
         required: false
 
 jobs:
   discover-packages:
     runs-on: ubuntu-latest
     outputs:
-      npm-count: ${{ steps.get-packages.outputs.npm-count }}
-      docker-count: ${{ steps.get-packages.outputs.docker-count }}
-      nuget-count: ${{ steps.get-packages.outputs.nuget-count }}
+      npm_packages: ${{ steps.get-packages.outputs.npm_packages }}
+      npm_count: ${{ steps.get-packages.outputs.npm_count }}
+      container_packages: ${{ steps.get-packages.outputs.container_packages }}
+      container_count: ${{ steps.get-packages.outputs.container_count }}
+      nuget_packages: ${{ steps.get-packages.outputs.nuget_packages }}
+      nuget_count: ${{ steps.get-packages.outputs.nuget_count }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       - name: Get packages
         id: get-packages
         uses: ./get-packages-action
         with:
-          source-org: ${{ github.event.inputs.source-org }}
-          source-api-url: ${{ github.event.inputs.source-api-url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          repo-name: ${{ github.event.inputs.repo-name }}
-  
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo_name: ${{ github.event.inputs.repo_name }}
+
   migrate-npm:
     needs: discover-packages
-    if: needs.discover-packages.outputs.npm-count > 0
+    if: needs.discover-packages.outputs.npm_count > 0
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       - name: Get packages again (to access the full output data)
         id: get-packages
         uses: ./get-packages-action
         with:
-          source-org: ${{ github.event.inputs.source-org }}
-          source-api-url: ${{ github.event.inputs.source-api-url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          repo-name: ${{ github.event.inputs.repo-name }}
-      
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo_name: ${{ github.event.inputs.repo_name }}
+
       - name: Migrate npm packages
         uses: ./migrate-npm-packages-action
         with:
-          source-org: ${{ github.event.inputs.source-org }}
-          source-api-url: ${{ github.event.inputs.source-api-url }}
-          target-org: ${{ github.event.inputs.target-org }}
-          target-api-url: ${{ github.event.inputs.target-api-url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ steps.get-packages.outputs.npm-packages }}
-  
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          target_org: ${{ github.event.inputs.target_org }}
+          target_api_url: ${{ github.event.inputs.target_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh_target_pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ needs.discover-packages.outputs.npm_packages }}
+
   migrate-docker:
     needs: discover-packages
-    if: needs.discover-packages.outputs.docker-count > 0
+    if: needs.discover-packages.outputs.container_count > 0
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       - name: Get packages again (to access the full output data)
         id: get-packages
         uses: ./get-packages-action
         with:
-          source-org: ${{ github.event.inputs.source-org }}
-          source-api-url: ${{ github.event.inputs.source-api-url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          repo-name: ${{ github.event.inputs.repo-name }}
-      
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo_name: ${{ github.event.inputs.repo_name }}
+
       - name: Migrate Docker packages
         uses: ./migrate-container-packages-action
         with:
-          source-org: ${{ github.event.inputs.source-org }}
-          source-api-url: ${{ github.event.inputs.source-api-url }}
-          source-registry-url: ${{ github.event.inputs.source-registry-url }}
-          target-org: ${{ github.event.inputs.target-org }}
-          target-api-url: ${{ github.event.inputs.target-api-url }}
-          target-registry-url: ${{ github.event.inputs.target-registry-url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          gh-target-pat: ${{ secrets.GH_TARGET_PAT }}
-          packages: ${{ steps.get-packages.outputs.docker-packages }}
-  
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          source_registry_url: ${{ github.event.inputs.source_registry_url }}
+          target_org: ${{ github.event.inputs.target_org }}
+          target_api_url: ${{ github.event.inputs.target_api_url }}
+          target_registry_url: ${{ github.event.inputs.target_registry_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh_target_pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ needs.discover-packages.outputs.container_packages }}
+
   migrate-nuget:
     needs: discover-packages
-    if: needs.discover-packages.outputs.nuget-count > 0
+    if: needs.discover-packages.outputs.nuget_count > 0
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       - name: Get packages again (to access the full output data)
         id: get-packages
         uses: ./get-packages-action
         with:
-          source-org: ${{ github.event.inputs.source-org }}
-          source-api-url: ${{ github.event.inputs.source-api-url }}
-          gh-source-pat: ${{ secrets.GH_SOURCE_PAT }}
-          repo-name: ${{ github.event.inputs.repo-name }}
-      
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          repo_name: ${{ github.event.inputs.repo_name }}
+
       - name: Migrate NuGet packages
-        run: echo "TODO: Implement NuGet package migration with packages: ${{ steps.get-packages.outputs.nuget-packages }}"
+        uses: ./migrate-nuget-packages-action
+        with:
+          source_org: ${{ github.event.inputs.source_org }}
+          source_api_url: ${{ github.event.inputs.source_api_url }}
+          target_org: ${{ github.event.inputs.target_org }}
+          target_api_url: ${{ github.event.inputs.target_api_url }}
+          gh_source_pat: ${{ secrets.GH_SOURCE_PAT }}
+          gh_target_pat: ${{ secrets.GH_TARGET_PAT }}
+          packages: ${{ needs.discover-packages.outputs.nuget_packages }}

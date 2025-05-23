@@ -1,47 +1,47 @@
 name: "Get GitHub Packages"
 description: "Discovers and filters packages from a GitHub organization by type and repository"
 inputs:
-  source-org:
+  source_org:
     description: "The source organization from which to get packages"
     required: true
-  source-api-url:
+  source_api_url:
     description: "The source GitHub API URL (e.g., https://api.github.com)"
     required: true
     default: "https://api.github.com"
-  gh-source-pat:
+  gh_source_pat:
     description: "GitHub PAT for reading packages from source host (needs read:packages scope)"
     required: true
-  repo-name:
+  repo_name:
     description: "Repository name to filter packages by. If not provided, will get packages without a linked repository"
     required: false
-  package-types:
+  package_types:
     description: "The package types to gather information about, comma separated. Options are: npm, maven, rubygems, docker, nuget, container"
     required: false
     default: "npm, nuget, container"
 outputs:
-  npm-packages:
+  npm_packages:
     description: "JSON array of npm packages found matching criteria"
-  npm-count:
+  npm_count:
     description: "Number of npm packages found"
-  container-packages:
+  container_packages:
     description: "JSON array of Container packages found matching criteria"
-  container-count:
+  container_count:
     description: "Number of Container packages found"
-  nuget-packages:
+  nuget_packages:
     description: "JSON array of NuGet packages found matching criteria"
-  nuget-count:
+  nuget_count:
     description: "Number of NuGet packages found"
-  rubygems-packages:
+  rubygems_packages:
     description: "JSON array of RubyGem packages found matching criteria"
-  rubygems-count:
+  rubygems_count:
     description: "Number of RubyGem packages found"
-  maven-packages:
+  maven_packages:
     description: "JSON array of Maven packages found matching criteria"
-  maven-count:
+  maven_count:
     description: "Number of Maven packages found"
-  all-packages:
+  all_packages:
     description: "JSON object containing all packages by type"
-  total-count:
+  total_count:
     description: "Total number of packages found across all types"
 runs:
   using: "node20"
