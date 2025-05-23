@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ncc build index.js -o dist --source-map -m"
+    "build": "ncc build index.js -o dist --source-map"
   },
   "keywords": [
     "github",

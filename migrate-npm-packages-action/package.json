@@ -4,7 +4,7 @@
   "description": "A GitHub Action to migrate npm packages between GitHub organizations.",
   "main": "index.js",
   "scripts": {
-    "build": "ncc build index.js -o dist --source-map -m",
+    "build": "ncc build index.js -o dist --source-map",
     "test": "echo 'No tests defined'"
   },
   "dependencies": {
