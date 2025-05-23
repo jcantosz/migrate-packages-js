@@ -1,6 +1,5 @@
 import * as core from "@actions/core";
 import { getBaseHostname } from "../../shared/utils.js";
-const { logInfo, logDebug, logError } = require('../../../shared/utils');
 
 export function extractRepoName(repoName, existingUrl) {
   return (
@@ -35,20 +34,4 @@ export function updateRepositoryDetails(pkgJson, repoName, targetOrg, targetApiU
     pkgJson.repository.url = newRepoUrl;
   }
   core.debug(`Updated repository URL to: ${newRepoUrl}`);
-}
-
-export async function createRepository(octokit, org, name) {
-  try {
-    logDebug(`Creating repository ${org}/${name}`);
-    const response = await octokit.repos.createInOrg({
-      org,
-      name,
-      private: true,
-    });
-    logInfo(`Created repository ${org}/${name}`);
-    return response.data;
-  } catch (error) {
-    logError(`Failed to create repository ${org}/${name}: ${error.message}`);
-    throw error;
-  }
 }
