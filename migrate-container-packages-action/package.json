@@ -2,11 +2,11 @@
   "name": "migrate-container-packages-action",
   "version": "1.0.0",
   "description": "GitHub Action to migrate container packages between GitHub organizations",
-  "main": "src/main.js",
+  "main": "index.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ncc build src/main.js -o dist --source-map -m"
+    "build": "ncc build index.js -o dist --source-map -m"
   },
   "keywords": [
     "github",
