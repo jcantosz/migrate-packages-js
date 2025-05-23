@@ -13,6 +13,7 @@ function buildImageReference(registry, org, packageName, reference, isDigest) {
  * Parse versions into tags and digests
  */
 function parseVersions(versions) {
+  core.info(`Processing ${versions.length} version entries`);
   const references = [];
 
   for (const version of versions) {
@@ -20,16 +21,24 @@ function parseVersions(versions) {
       reference: version.name,
       isDigest: true,
     });
+    core.debug(`Added digest: ${version.name}`);
 
     const tags = version.metadata?.container?.tags || [];
+    core.info(`Found ${tags.length} tags for version ${version.name}`);
     references.push(
       ...tags.map((tag) => ({
         reference: tag,
         isDigest: false,
       }))
     );
+    tags.forEach((tag) => core.debug(`Added tag: ${tag}`));
   }
 
+  core.info(
+    `Total references to migrate: ${references.length} (${references.filter((r) => r.isDigest).length} digests, ${
+      references.filter((r) => !r.isDigest).length
+    } tags)`
+  );
   return references;
 }
 
@@ -68,6 +77,8 @@ function performImageMigration(packageName, reference, context, isDigest) {
 
   const referencePrefix = isDigest ? "@" : ":";
   core.info(`Migrating ${packageName}${referencePrefix}${reference}`);
+  core.debug(`Source image: ${sourceImage}`);
+  core.debug(`Target image: ${targetImage}`);
 
   const skopeoCommand = `skopeo copy --preserve-digests --all --src-creds USERNAME:${ghSourcePat} --dest-creds USERNAME:${ghTargetPat} ${sourceImage} ${targetImage}`;
 
@@ -75,6 +86,8 @@ function performImageMigration(packageName, reference, context, isDigest) {
 
   if (success) {
     core.info(`Successfully migrated ${packageName}${referencePrefix}${reference}`);
+  } else {
+    core.error(`Failed to migrate ${packageName}${referencePrefix}${reference}`);
   }
 
   return success;
@@ -93,6 +106,8 @@ async function migrateReferences(packageName, references, context) {
     tagsFailed: 0,
   };
 
+  core.info(`Starting migration of ${references.length} references for package ${packageName}`);
+
   for (const { reference, isDigest } of references) {
     const success = await withRetry(() => performImageMigration(packageName, reference, context, isDigest), {
       onRetry: (error, attempt) => {
@@ -106,6 +121,14 @@ async function migrateReferences(packageName, references, context) {
 
     updateReferenceResults(results, success, isDigest);
   }
+
+  core.info(`Migration results for ${packageName}:
+    Total Success: ${results.successCount}
+    Total Failed: ${results.failureCount}
+    Digests Succeeded: ${results.digestsSucceeded}
+    Digests Failed: ${results.digestsFailed}
+    Tags Succeeded: ${results.tagsSucceeded}
+    Tags Failed: ${results.tagsFailed}`);
 
   return results;
 }
@@ -136,8 +159,10 @@ export async function migratePackage(pkg, context) {
 
   const versions = await fetchPackageVersions(octokitSource, sourceOrg, packageName, "container");
   if (!versions.length) {
+    core.warning(`No versions found for package ${packageName}`);
     return buildSkipResult(packageName);
   }
+  core.info(`Found ${versions.length} versions for package ${packageName}`);
 
   const references = parseVersions(versions);
   const results = await migrateReferences(packageName, references, context);

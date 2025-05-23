@@ -8,8 +8,9 @@ import { migratePackage } from "./migration.js";
  */
 export async function run() {
   try {
-    core.debug("Parsing packages input");
+    core.info("Starting container package migration");
     const packagesJson = core.getInput("packages", { required: true });
+    core.info("Parsing input packages");
     const packages = parsePackagesInput(packagesJson, "container");
 
     if (!packages.length) {
@@ -18,18 +19,24 @@ export async function run() {
       return;
     }
 
+    core.info(`Found ${packages.length} container packages to migrate`);
+
     // Set up required dependencies
-    core.debug("Checking requirements");
+    core.info("Checking Docker installation");
     checkDockerInstallation();
+    core.info("Setting up Skopeo");
     if (!setupSkopeo()) {
       throw new Error("Failed to set up Skopeo. Migration cannot continue.");
     }
 
     // Set up migration context and execute migrations
+    core.info("Setting up migration context");
     const context = setupContext(core, "container");
-    core.debug("Migrating packages");
+    core.info("Starting package migration");
     await migratePackagesWithContext(packages, context, migratePackage, "container");
+    core.info("Container package migration completed");
   } catch (error) {
+    core.error(`Action failed: ${error.message}`);
     core.setFailed(`Action failed: ${error.message}`);
   }
 }
