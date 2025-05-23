@@ -7,7 +7,8 @@
     "tar": "^7.4.3"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.38.1"
+    "@vercel/ncc": "^0.38.1",
+    "ncc": "^0.3.6"
   },
   "scripts": {
     "build": "npm run build:all",
