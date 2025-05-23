@@ -8,6 +8,7 @@ import { migratePackage } from "./migration.js";
  */
 export async function run() {
   try {
+    core.debug("Parsing packages input");
     const packagesJson = core.getInput("packages", { required: true });
     const packages = parsePackagesInput(packagesJson, "container");
 
@@ -18,6 +19,7 @@ export async function run() {
     }
 
     // Set up required dependencies
+    core.debug("Checking requirements");
     checkDockerInstallation();
     if (!setupSkopeo()) {
       throw new Error("Failed to set up Skopeo. Migration cannot continue.");
@@ -25,6 +27,7 @@ export async function run() {
 
     // Set up migration context and execute migrations
     const context = setupContext(core, "container");
+    core.debug("Migrating packages");
     await migratePackagesWithContext(packages, context, migratePackage, "container");
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);
