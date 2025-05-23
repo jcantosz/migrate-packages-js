@@ -38,7 +38,7 @@ export function executeSkopeoCommand(skopeoCommand, packageName, reference) {
 
   try {
     core.info(`Starting migration for ${packageName} with reference ${reference}`);
-    const output = execSync(dockerCommand, { stdio: "inherit" }).toString();
+    const output = execSync(dockerCommand, { stdio: "pipe" }).toString();
     core.info(`Skopeo command output: ${output}`);
     return true;
   } catch (err) {
